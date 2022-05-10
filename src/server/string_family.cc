@@ -300,13 +300,23 @@ void StringFamily::Get(CmdArgList args, ConnectionContext* cntx) {
 
   std::string_view key = ArgS(args, 1);
 
+  uint64_t inside_usec = 0;
   auto cb = [&](Transaction* t, EngineShard* shard) {
-    return OpGet(OpArgs{shard, t->db_index()}, key);
+    uint64_t start = absl::GetCurrentTimeNanos();
+    auto res = OpGet(OpArgs{shard, t->db_index()}, key);
+    inside_usec = (absl::GetCurrentTimeNanos() - start) / 1000;
+    // LOG_IF(INFO, inside_usec > 3000) << "Get took " << usec << " us";
+
+    return res;
   };
 
   DVLOG(1) << "Before Get::ScheduleSingleHopT " << key;
   Transaction* trans = cntx->transaction;
+  auto* pb = util::ProactorBase::me();
+  uint64_t start = pb->GetMonotonicTimeNs();
   OpResult<string> result = trans->ScheduleSingleHopT(std::move(cb));
+  uint64_t usec = (pb->GetMonotonicTimeNs() - start) / 1000;
+  // LOG_IF(INFO, usec > 6000) << "RGet took " << usec << " us, inside " << inside_usec;
 
   if (result) {
     DVLOG(1) << "GET " << trans->DebugId() << ": " << key << " " << result.value();

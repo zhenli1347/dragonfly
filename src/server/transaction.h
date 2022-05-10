@@ -268,6 +268,7 @@ class Transaction {
 
   util::fibers_ext::EventCount blocking_ec_;  // used to wake blocking transactions.
   util::fibers_ext::EventCount run_ec_;
+  std::atomic_uint64_t notify_ts_{0};
 
   // shard_data spans all the shards in ess_.
   // I wish we could use a dense array of size [0..uniq_shards] but since

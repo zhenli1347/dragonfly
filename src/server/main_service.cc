@@ -43,6 +43,7 @@ DECLARE_string(requirepass);
 DEFINE_uint64(maxmemory, 0,
               "Limit on maximum-memory that is used by the database."
               "0 - means the program will automatically determine its maximum memory usage");
+DEFINE_uint32(thread_shards_num, 0, "");
 
 namespace dfly {
 
@@ -311,7 +312,10 @@ void Service::Init(util::AcceptServer* acceptor, util::ListenerInterface* main_i
                    const InitOpts& opts) {
   InitRedisTables();
 
-  uint32_t shard_num = pp_.size() > 1 ? pp_.size() - 1 : pp_.size();
+  uint32_t shard_num = FLAGS_thread_shards_num;
+  CHECK_LE(shard_num, pp_.size());
+  if (shard_num == 0)
+    shard_num = pp_.size() > 1 ? pp_.size() - 1 : pp_.size();
   shard_set_.Init(shard_num);
 
   pp_.AwaitFiberOnAll([&](uint32_t index, ProactorBase* pb) {

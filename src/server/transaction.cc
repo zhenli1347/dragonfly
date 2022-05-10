@@ -521,6 +521,8 @@ OpStatus Transaction::ScheduleSingleHop(RunnableType cb) {
   }
 
   bool schedule_fast = (unique_shard_cnt_ == 1) && !IsGlobal() && !multi_;
+  uint64_t at_cb_run = 0;
+  bool notified = false;
   if (schedule_fast) {  // Single shard (local) optimization.
     // We never resize shard_data because that would affect MULTI transaction correctness.
     DCHECK_EQ(1u, shard_data_.size());
@@ -538,6 +540,8 @@ OpStatus Transaction::ScheduleSingleHop(RunnableType cb) {
     // call PollExecute that runs the callback which calls DecreaseRunCnt.
     // As a result WaitForShardCallbacks below is unblocked.
     auto schedule_cb = [&] {
+      auto* pb = util::ProactorBase::me();
+      at_cb_run = pb->GetMonotonicTimeNs();
       bool run_eager = ScheduleUniqueShard(EngineShard::tlocal());
       if (run_eager) {
         // it's important to DecreaseRunCnt only for run_eager and after run_eager was assigned.
@@ -548,7 +552,8 @@ OpStatus Transaction::ScheduleSingleHop(RunnableType cb) {
       }
     };
 
-    ess_->Add(unique_shard_id_, std::move(schedule_cb));  // serves as a barrier.
+    notified = ess_->Add(unique_shard_id_, std::move(schedule_cb));  // serves as a barrier.
+    // after_sched = pb->GetMonotonicTimeNs();
   } else {
     // Transaction spans multiple shards or it's global (like flushdb) or multi.
     if (!multi_)
@@ -557,7 +562,14 @@ OpStatus Transaction::ScheduleSingleHop(RunnableType cb) {
   }
 
   DVLOG(1) << "ScheduleSingleHop before Wait " << DebugId() << " " << run_count_.load();
+  auto* pb = util::ProactorBase::me();
+  uint64_t start = pb->GetMonotonicTimeNs();
   WaitForShardCallbacks();
+  uint64_t end = pb->GetMonotonicTimeNs();
+  uint64_t usec = (end - start) / 1000;
+  LOG_IF(INFO, usec > 8000) << "waitcbs took " << usec << " us, since notify "
+      << (end - notify_ts_) / 1000 << ", since run: " << (end - at_cb_run) / 1000
+      << " notified:" << notified;
   DVLOG(1) << "ScheduleSingleHop after Wait " << DebugId();
 
   cb_ = nullptr;
@@ -1113,6 +1125,10 @@ inline uint32_t Transaction::DecreaseRunCnt() {
   // We use release so that no stores will be reordered after.
   uint32_t res = run_count_.fetch_sub(1, std::memory_order_release);
   if (res == 1) {
+    auto* pb = util::ProactorBase::me();
+    uint64_t start = pb->GetMonotonicTimeNs();
+
+    notify_ts_.store(start, memory_order_relaxed);
     run_ec_.notify();
   }
   return res;
