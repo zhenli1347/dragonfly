@@ -492,13 +492,44 @@ auto Connection::IoLoop(util::FiberSocketBase* peer) -> variant<error_code, Pars
   error_code ec;
   ParserStatus parse_status = OK;
 
+  uring::Proactor* proactor = (uring::Proactor*)ProactorBase::me();
+  auto* me = fibers::context::active();
+  LinuxSocketBase* lsb = static_cast<LinuxSocketBase*>(socket_.get());
+
   do {
     FetchBuilderStats(stats, builder);
 
     io::MutableBytes append_buf = io_buf_.AppendBuffer();
     SetPhase("readsock");
 
-    ::io::Result<size_t> recv_sz = peer->Recv(append_buf);
+    uring::Proactor::IoResult io_res;
+    uint32_t io_flags;
+
+    auto waker = [&](uring::Proactor::IoResult res, uint32_t flags, int64_t) {
+      io_res = res;
+      io_flags = flags;
+      SetPhase("recvwake");
+      fibers::context::active()->schedule(me);
+    };
+    uring::SubmitEntry se = proactor->GetSubmitEntry(waker, 0);
+    msghdr msg;
+    memset(&msg, 0, sizeof(msg));
+    iovec iv{append_buf.data(), append_buf.size()};
+
+    msg.msg_iov = &iv;
+    msg.msg_iovlen = 1;
+
+    se.PrepRecvMsg(lsb->native_handle(), &msg, 0);
+    me->suspend();
+    ::io::Result<size_t> recv_sz;
+    if (io_res > 0) {
+      recv_sz = io_res;
+    } else {
+      error_code ec(-io_res, system_category());
+      LOG(ERROR) << "socket error " << lsb->native_handle() << " " << ec;
+      recv_sz = nonstd::make_unexpected(std::move(ec));
+    }
+    // ::io::Result<size_t> recv_sz = peer->Recv(append_buf);
     last_interaction_ = time(nullptr);
 
     if (!recv_sz) {
