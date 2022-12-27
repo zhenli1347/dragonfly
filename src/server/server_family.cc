@@ -1242,6 +1242,8 @@ void ServerFamily::Info(CmdArgList args, ConnectionContext* cntx) {
     append("connected_clients", m.conn_stats.num_conns);
     append("client_read_buf_capacity", m.conn_stats.read_buf_capacity);
     append("blocked_clients", m.conn_stats.num_blocked_clients);
+    append("dispatch_enqueue_slow_total", m.conn_stats.dispatch_enqueue_slow_cnt);
+    append("dispatch_enqueue_fast_total", m.conn_stats.dispatch_enqueue_fast_cnt);
   }
 
   if (should_enter("MEMORY")) {

@@ -42,6 +42,8 @@ IntentLock::Mode Transaction::Mode() const {
  * @param cs
  */
 Transaction::Transaction(const CommandId* cid) : cid_(cid) {
+  enque_speed_[0] = enque_speed_[1] = 0;
+
   string_view cmd_name(cid_->name());
   if (cmd_name == "EXEC" || cmd_name == "EVAL" || cmd_name == "EVALSHA") {
     multi_.reset(new Multi);
@@ -592,7 +594,9 @@ OpStatus Transaction::ScheduleSingleHop(RunnableType cb) {
       }
     };
 
-    shard_set->Add(unique_shard_id_, std::move(schedule_cb));  // serves as a barrier.
+    bool slow_enque =
+        shard_set->Add(unique_shard_id_, std::move(schedule_cb));  // serves as a barrier.
+    ++enque_speed_[slow_enque];
   } else {
     // Transaction spans multiple shards or it's global (like flushdb) or multi.
     // Note that the logic here is a bit different from the public Schedule() function.
@@ -741,13 +745,15 @@ void Transaction::ExecuteAsync() {
 
   // IsArmedInShard is the protector of non-thread safe data.
   if (!is_global && unique_shard_cnt_ == 1) {
-    shard_set->Add(unique_shard_id_, std::move(cb));  // serves as a barrier.
+    bool slow_enque = shard_set->Add(unique_shard_id_, std::move(cb));  // serves as a barrier.
+    ++enque_speed_[slow_enque];
   } else {
     for (ShardId i = 0; i < shard_data_.size(); ++i) {
       auto& sd = shard_data_[i];
       if (!is_global && sd.arg_count == 0)
         continue;
-      shard_set->Add(i, cb);  // serves as a barrier.
+      bool slow_enque = shard_set->Add(i, cb);  // serves as a barrier.
+      ++enque_speed_[slow_enque];
     }
   }
 }

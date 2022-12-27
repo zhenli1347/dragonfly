@@ -698,6 +698,8 @@ void Service::DispatchCommand(CmdArgList args, facade::ConnectionContext* cntx) 
   if (dist_trans) {
     dfly_cntx->last_command_debug.clock = dist_trans->txid();
     dfly_cntx->last_command_debug.is_ooo = dist_trans->IsOOO();
+    etl.connection_stats.dispatch_enqueue_fast_cnt += dist_trans->fast_enque_count();
+    etl.connection_stats.dispatch_enqueue_slow_cnt += dist_trans->slow_enque_count();
   }
 
   if (!under_script) {

@@ -246,7 +246,7 @@ class EngineShardSet {
   }
 
   // Uses a shard queue to dispatch. Callback runs in a dedicated fiber.
-  template <typename F> auto Add(ShardId sid, F&& f) {
+  template <typename F> bool Add(ShardId sid, F&& f) {
     assert(sid < shard_queue_.size());
     return shard_queue_[sid]->Add(std::forward<F>(f));
   }

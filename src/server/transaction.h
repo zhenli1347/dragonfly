@@ -185,6 +185,14 @@ class Transaction {
     return db_index_;
   }
 
+  uint32_t slow_enque_count() const {
+    return enque_speed_[1];
+  }
+
+  uint32_t fast_enque_count() const {
+    return enque_speed_[0];
+  }
+
  private:
   struct LockCnt {
     unsigned cnt[2] = {0, 0};
@@ -304,6 +312,7 @@ class Transaction {
 
   // unique_shard_cnt_ and unique_shard_id_ is accessed only by coordinator thread.
   uint32_t unique_shard_cnt_{0};  // number of unique shards span by args_
+  uint32_t enque_speed_[2];       // 0 counts fast enqueus, 1 counts slow enques.
 
   ShardId unique_shard_id_{kInvalidSid};
   DbIndex db_index_;

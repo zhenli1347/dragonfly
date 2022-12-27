@@ -931,7 +931,7 @@ error_code Replica::ParseAndExecute(base::IoBuf* io_buf) {
                   << "\n consumed: " << consumed;
           facade::RespToArgList(resp_args_, &cmd_str_args_);
           CmdArgList arg_list{cmd_str_args_.data(), cmd_str_args_.size()};
-          service_.DispatchCommand(arg_list, &conn_context);
+          // service_.DispatchCommand(arg_list, &conn_context);
         }
         io_buf->ConsumeInput(consumed);
         break;
