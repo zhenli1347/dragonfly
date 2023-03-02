@@ -1,3 +1,11 @@
+function(cur_gen_dir out_dir)
+  file(RELATIVE_PATH _rel_folder "${PROJECT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}")
+
+  set(_tmp_dir ${ROOT_GEN_DIR}/${_rel_folder})
+  set(${out_dir} ${_tmp_dir} PARENT_SCOPE)
+  file(MAKE_DIRECTORY ${_tmp_dir})
+endfunction()
+
 add_third_party(
   lua
   URL https://github.com/lua/lua/archive/refs/tags/v5.4.4.tar.gz
