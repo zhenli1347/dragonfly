@@ -5,20 +5,20 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.1
   creationTimestamp: null
-  name: dragonflies.dragonflydb.io
+  name: dragonflydbs.dragonflydb.io
 spec:
   group: dragonflydb.io
   names:
-    kind: Dragonfly
-    listKind: DragonflyList
-    plural: dragonflies
-    singular: dragonfly
+    kind: DragonflyDb
+    listKind: DragonflyDbList
+    plural: dragonflydbs
+    singular: dragonflydb
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Dragonfly is the Schema for the dragonflies API
+        description: DragonflyDb is the Schema for the dragonflydbs API
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -33,15 +33,15 @@ spec:
           metadata:
             type: object
           spec:
-            description: DragonflySpec defines the desired state of Dragonfly
+            description: DragonflyDbSpec defines the desired state of DragonflyDb
             properties:
               foo:
-                description: Foo is an example field of Dragonfly. Edit dragonfly_types.go
+                description: Foo is an example field of DragonflyDb. Edit dragonflydb_types.go
                   to remove/update
                 type: string
             type: object
           status:
-            description: DragonflyStatus defines the observed state of Dragonfly
+            description: DragonflyDbStatus defines the observed state of DragonflyDb
             type: object
         type: object
     served: true

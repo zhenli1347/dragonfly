@@ -89,11 +89,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.DragonflyReconciler{
+	if err = (&controller.DragonflyDbReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Dragonfly")
+		setupLog.Error(err, "unable to create controller", "controller", "DragonflyDb")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

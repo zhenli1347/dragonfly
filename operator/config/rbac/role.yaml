@@ -8,7 +8,7 @@ rules:
 - apiGroups:
   - dragonflydb.io
   resources:
-  - dragonflies
+  - dragonflydbs
   verbs:
   - create
   - delete
@@ -20,13 +20,13 @@ rules:
 - apiGroups:
   - dragonflydb.io
   resources:
-  - dragonflies/finalizers
+  - dragonflydbs/finalizers
   verbs:
   - update
 - apiGroups:
   - dragonflydb.io
   resources:
-  - dragonflies/status
+  - dragonflydbs/status
   verbs:
   - get
   - patch
