@@ -48,6 +48,8 @@ type DragonflyDbStatus struct {
 
 	// Created is true if the database resources have been created
 	Created bool `json:"created,omitempty"`
+
+	Phase string `json:"phase,omitempty"`
 }
 
 //+kubebuilder:object:root=true

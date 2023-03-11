@@ -57,15 +57,17 @@ func GetDatabaseResources(ctx context.Context, db *resourcesv1.DragonflyDb) ([]c
 			ServiceName: db.Name,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"app":                    db.Name,
-					KubernetesPartOfLabelKey: "dragonflydb",
+					"app":                     db.Name,
+					KubernetesPartOfLabelKey:  "dragonflydb",
+					KubernetesAppNameLabelKey: "dragonflydb",
 				},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app":                    db.Name,
-						KubernetesPartOfLabelKey: "dragonflydb",
+						"app":                     db.Name,
+						KubernetesPartOfLabelKey:  "dragonflydb",
+						KubernetesAppNameLabelKey: "dragonflydb",
 					},
 				},
 				Spec: corev1.PodSpec{
@@ -112,7 +114,7 @@ func GetDatabaseResources(ctx context.Context, db *resourcesv1.DragonflyDb) ([]c
 								SuccessThreshold:    1,
 								TimeoutSeconds:      5,
 							},
-							// ImagePullPolicy: corev1.PullAlways,
+							ImagePullPolicy: corev1.PullAlways,
 						},
 					},
 				},
@@ -148,8 +150,9 @@ func GetDatabaseResources(ctx context.Context, db *resourcesv1.DragonflyDb) ([]c
 		Spec: corev1.ServiceSpec{
 			ClusterIP: "None",
 			Selector: map[string]string{
-				"app":    db.Name,
-				"active": "true",
+				"app":                     db.Name,
+				KubernetesAppNameLabelKey: "dragonflydb",
+				"role":                    "master",
 			},
 			Ports: []corev1.ServicePort{
 				{

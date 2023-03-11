@@ -23,6 +23,8 @@ import (
 
 	dfdb "dragonflydb.io/dragonfly/api/v1alpha1"
 	"dragonflydb.io/dragonfly/internal/resources"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,6 +40,8 @@ type DragonflyDbReconciler struct {
 //+kubebuilder:rbac:groups=dragonflydb.io,resources=dragonflydbs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=dragonflydb.io,resources=dragonflydbs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=dragonflydb.io,resources=dragonflydbs/finalizers,verbs=update
+//+kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -77,7 +81,7 @@ func (r *DragonflyDbReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 
 		log.Info("Waiting for the statefulset to be ready")
-		if err := waitForStatefulSetReady(ctx, r.Client, db.Name, db.Namespace, 1*time.Minute); err != nil {
+		if err := waitForStatefulSetReady(ctx, r.Client, db.Name, db.Namespace, 2*time.Minute); err != nil {
 			log.Error(err, "could not wait for statefulset to be ready")
 			return ctrl.Result{}, err
 		}
@@ -89,6 +93,7 @@ func (r *DragonflyDbReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 		// Update Status
 		db.Status.Created = true
+		db.Status.Phase = PhaseInitialized
 		log.Info("Created resources for object")
 		if err := r.Status().Update(ctx, &db); err != nil {
 			log.Error(err, "could not update the Database object")
@@ -103,5 +108,7 @@ func (r *DragonflyDbReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 func (r *DragonflyDbReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&dfdb.DragonflyDb{}).
+		Owns(&appsv1.StatefulSet{}).
+		Owns(&corev1.Service{}).
 		Complete(r)
 }
