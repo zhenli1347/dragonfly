@@ -14,6 +14,7 @@ namespace dfly {
 
 class EngineShardSet;
 class ConnectionContext;
+class QSubScriber;
 
 struct StoredCmd {
   const CommandId* descr;
@@ -142,6 +143,7 @@ class ConnectionContext : public facade::ConnectionContext {
   bool is_replicating = false;
   bool monitor = false;  // when a monitor command is sent over a given connection, we need to aware
                          // of it as a state for the connection
+  QSubScriber* qsub = nullptr;
 
  private:
   void EnableMonitoring(bool enable) {

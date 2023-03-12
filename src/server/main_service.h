@@ -103,6 +103,7 @@ class Service : public facade::ServiceInterface {
   void Unsubscribe(CmdArgList args, ConnectionContext* cntx);
   void PSubscribe(CmdArgList args, ConnectionContext* cntx);
   void PUnsubscribe(CmdArgList args, ConnectionContext* cntx);
+  void QPop(CmdArgList args, ConnectionContext* cntx);
   void Function(CmdArgList args, ConnectionContext* cntx);
   void Monitor(CmdArgList args, ConnectionContext* cntx);
   void Pubsub(CmdArgList args, ConnectionContext* cntx);

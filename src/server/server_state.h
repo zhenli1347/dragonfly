@@ -77,6 +77,12 @@ class MonitorsRepo {
   unsigned int global_count_ = 0;  // by global its means that we count the monitor for all threads
 };
 
+struct QSubScriber {
+  ConnectionContext* ctx;
+  std::optional<std::string> msg;
+  util::fibers_ext::EventCount ec;
+};
+
 // Present in every server thread. This class differs from EngineShard. The latter manages
 // state around engine shards while the former represents coordinator/connection state.
 // There may be threads that handle engine shards but not IO, there may be threads that handle IO
@@ -187,6 +193,9 @@ class ServerState {  // public struct - to allow initialization.
   }
 
   Stats stats;
+
+  using QSubList = std::vector<QSubScriber*>;
+  absl::flat_hash_map<std::string, QSubList*> qsub_list;
 
  private:
   int64_t live_transactions_ = 0;

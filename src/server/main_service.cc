@@ -869,9 +869,16 @@ facade::ConnectionContext* Service::CreateContext(util::FiberSocketBase* peer,
 
   // a bit of a hack. I set up breaker callback here for the owner.
   // Should work though it's confusing to have it here.
-  owner->RegisterOnBreak([res, this](uint32_t) {
+  owner->RegisterOnBreak([res, this](uint32_t event) {
+    DVLOG(1) << "RegisterOnBreak " << event;
+
     if (res->transaction) {
       res->transaction->BreakOnShutdown();
+    }
+    if (res->qsub) {
+      auto* qsub = res->qsub;
+      res->qsub = nullptr;
+      qsub->ec.notify();
     }
     this->server_family().BreakOnShutdown();
   });
@@ -1462,6 +1469,29 @@ void Service::PUnsubscribe(CmdArgList args, ConnectionContext* cntx) {
   }
 }
 
+void Service::QPop(CmdArgList args, ConnectionContext* cntx) {
+  ServerState* ss = ServerState::tlocal();
+  string_view qname = ArgS(args, 1);
+  if (qname.empty()) {
+    return (*cntx)->SendError("Empty queue name", kSyntaxErrType);
+  }
+
+  auto [it, inserted] = ss->qsub_list.emplace(qname, nullptr);
+  if (inserted) {
+    it->second = new ServerState::QSubList;
+  }
+
+  QSubScriber qsub;
+  cntx->qsub = &qsub;
+  it->second->push_back(&qsub);
+  qsub.ec.await([&] { return qsub.msg.has_value() || cntx->qsub == nullptr; });
+
+  cntx->qsub = nullptr;
+  if (qsub.msg.has_value()) {
+    return (*cntx)->SendOk();
+  }
+}
+
 // Not a real implementation. Serves as a decorator to accept some function commands
 // for testing.
 void Service::Function(CmdArgList args, ConnectionContext* cntx) {
@@ -1641,6 +1671,7 @@ void Service::RegisterCommands() {
       << CI{"UNSUBSCRIBE", CO::NOSCRIPT | CO::LOADING, -1, 0, 0, 0}.MFUNC(Unsubscribe)
       << CI{"PSUBSCRIBE", CO::NOSCRIPT | CO::LOADING, -2, 0, 0, 0}.MFUNC(PSubscribe)
       << CI{"PUNSUBSCRIBE", CO::NOSCRIPT | CO::LOADING, -1, 0, 0, 0}.MFUNC(PUnsubscribe)
+      << CI{"QPOP", CO::NOSCRIPT | CO::LOADING, 2, 0, 0, 0}.MFUNC(QPop)
       << CI{"FUNCTION", CO::NOSCRIPT, 2, 0, 0, 0}.MFUNC(Function)
       << CI{"MONITOR", CO::ADMIN, 1, 0, 0, 0}.MFUNC(Monitor)
       << CI{"PUBSUB", CO::LOADING | CO::FAST, -1, 0, 0, 0}.MFUNC(Pubsub);
