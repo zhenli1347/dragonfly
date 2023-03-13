@@ -107,15 +107,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	/*
-		if err = (&controller.HealthReconciler{
-			Client: mgr.GetClient(),
-			Scheme: mgr.GetScheme(),
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "Health")
-			os.Exit(1)
-		}
-	*/
+	if err = (&controller.HealthReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Health")
+		os.Exit(1)
+	}
 
 	//+kubebuilder:scaffold:builder
 
