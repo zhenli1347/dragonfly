@@ -53,7 +53,7 @@ func (r *DragonflyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	log.Info("Reconciling Database object")
 	// Ignore if resource is already created
 	// TODO: Handle updates to the Database object
-	if !db.Status.Created {
+	if db.Status.Phase == "" {
 		log.Info("Creating resources")
 		resources, err := resources.GetDatabaseResources(ctx, &db)
 		if err != nil {
@@ -75,13 +75,8 @@ func (r *DragonflyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			return ctrl.Result{}, err
 		}
 
-		if err := findHealthyAndMarkActive(ctx, r.Client, &db); err != nil {
-			log.Error(err, "could not find healthy and mark active")
-			return ctrl.Result{}, err
-		}
-
 		// Update Status
-		db.Status.Created = true
+		db.Status.Phase = PhaseInitialized
 		log.Info("Created resources for object")
 		if err := r.Status().Update(ctx, &db); err != nil {
 			log.Error(err, "could not update the Database object")

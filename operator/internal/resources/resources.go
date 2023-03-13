@@ -156,7 +156,7 @@ func GetDatabaseResources(ctx context.Context, db *resourcesv1.Dragonfly) ([]cli
 			Selector: map[string]string{
 				"app":                     db.Name,
 				KubernetesAppNameLabelKey: "dragonfly",
-				"role":                    "master",
+				Role:                      Master,
 			},
 			Ports: []corev1.ServicePort{
 				{
