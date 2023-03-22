@@ -13,9 +13,9 @@ extern "C" {
 #include "base/logging.h"
 #include "server/blocking_controller.h"
 #include "server/server_state.h"
-#include "server/tiered_storage.h"
+// #include "server/tiered_storage.h"
 #include "server/transaction.h"
-#include "util/fiber_sched_algo.h"
+// #include "util/fiber_sched_algo.h"
 #include "util/varz.h"
 
 using namespace std;
@@ -197,7 +197,7 @@ uint32_t EngineShard::DefragTask() {
 EngineShard::EngineShard(util::ProactorBase* pb, bool update_db_time, mi_heap_t* heap)
     : queue_(kQueueLen), txq_([](const Transaction* t) { return t->txid(); }), mi_resource_(heap),
       db_slice_(pb->GetIndex(), GetFlag(FLAGS_cache_mode), this) {
-  fiber_q_ = MakeFiber([this, index = pb->GetIndex()] {
+  fiber_q_ = fb2::Fiber([this, index = pb->GetIndex()] {
     ThisFiber::SetName(absl::StrCat("shard_queue", index));
     queue_.Run();
   });
@@ -207,7 +207,7 @@ EngineShard::EngineShard(util::ProactorBase* pb, bool update_db_time, mi_heap_t*
     if (clock_cycle_ms == 0)
       clock_cycle_ms = 1;
 
-    fiber_periodic_ = MakeFiber([this, index = pb->GetIndex(), period_ms = clock_cycle_ms] {
+    fiber_periodic_ = fb2::Fiber([this, index = pb->GetIndex(), period_ms = clock_cycle_ms] {
       ThisFiber::SetName(absl::StrCat("shard_periodic", index));
       RunPeriodic(std::chrono::milliseconds(period_ms));
     });
@@ -227,11 +227,11 @@ EngineShard::~EngineShard() {
 void EngineShard::Shutdown() {
   queue_.Shutdown();
   fiber_q_.Join();
-
+#if 0
   if (tiered_storage_) {
     tiered_storage_->Shutdown();
   }
-
+#endif
   fiber_periodic_done_.Notify();
   if (fiber_periodic_.IsJoinable()) {
     fiber_periodic_.Join();
@@ -250,6 +250,7 @@ void EngineShard::InitThreadLocal(ProactorBase* pb, bool update_db_time) {
   CompactObj::InitThreadLocal(shard_->memory_resource());
   SmallString::InitThreadLocal(data_heap);
 
+#if 0
   string backing_prefix = GetFlag(FLAGS_spill_file_prefix);
   if (!backing_prefix.empty()) {
     if (pb->GetKind() != ProactorBase::IOURING) {
@@ -261,6 +262,7 @@ void EngineShard::InitThreadLocal(ProactorBase* pb, bool update_db_time) {
     error_code ec = shard_->tiered_storage_->Open(backing_prefix);
     CHECK(!ec) << ec.message();  // TODO
   }
+#endif
 }
 
 void EngineShard::DestroyThreadLocal() {
@@ -531,8 +533,8 @@ BlockingController* EngineShard::EnsureBlockingController() {
 }
 
 void EngineShard::TEST_EnableHeartbeat() {
-  fiber_periodic_ = MakeFiber([this, period_ms = 1] {
-    FiberProps::SetName("shard_periodic_TEST");
+  fiber_periodic_ = fb2::Fiber([this, period_ms = 1] {
+    ThisFiber::SetName("shard_periodic_TEST");
     RunPeriodic(std::chrono::milliseconds(period_ms));
   });
 }

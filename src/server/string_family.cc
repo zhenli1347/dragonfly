@@ -46,6 +46,7 @@ constexpr uint32_t kMinTieredLen = TieredStorage::kMinBlobLen;
 
 string GetString(EngineShard* shard, const PrimeValue& pv) {
   string res;
+#if 0
   if (pv.IsExternal()) {
     auto* tiered = shard->tiered_storage();
     auto [offset, size] = pv.GetExternalSlice();
@@ -56,7 +57,8 @@ string GetString(EngineShard* shard, const PrimeValue& pv) {
   } else {
     pv.GetString(&res);
   }
-
+#endif
+  pv.GetString(&res);
   return res;
 }
 
@@ -523,13 +525,14 @@ OpStatus SetCmd::Set(const SetParams& params, string_view key, string_view value
 
   if (params.memcache_flags)
     db_slice.SetMCFlag(op_args_.db_cntx.db_index, it->first.AsRef(), params.memcache_flags);
-
+#if 0
   if (shard->tiered_storage() &&
       TieredStorage::EligibleForOffload(value)) {  // external storage enabled.
     // TODO: we may have a bug if we block the fiber inside UnloadItem - "it" may be invalid
     // afterwards.
     shard->tiered_storage()->ScheduleOffload(op_args_.db_cntx.db_index, it);
   }
+#endif
 
   if (manual_journal_ && op_args_.shard->journal()) {
     RecordJournal(params, key, value);
@@ -589,9 +592,9 @@ OpStatus SetCmd::SetExisting(const SetParams& params, PrimeIterator it, ExpireIt
     // TODO: if UnloadItem can block the calling fiber, then we have the bug because then "it"
     // can be invalid after the function returns and the functions that follow may access invalid
     // entry.
-    if (shard->tiered_storage()) {
-      shard->tiered_storage()->ScheduleOffload(op_args_.db_cntx.db_index, it);
-    }
+    // if (shard->tiered_storage()) {
+    //  shard->tiered_storage()->ScheduleOffload(op_args_.db_cntx.db_index, it);
+    //}
   }
 
   db_slice.PostUpdate(op_args_.db_cntx.db_index, it, key);

@@ -12,7 +12,7 @@ namespace dfly {
 class Transaction;
 
 namespace journal {
-
+#if 0
 class Journal {
  public:
   using Span = absl::Span<const std::string_view>;
@@ -57,6 +57,7 @@ class Journal {
 
   std::atomic_bool lameduck_{false};
 };
+#endif
 
 }  // namespace journal
 }  // namespace dfly

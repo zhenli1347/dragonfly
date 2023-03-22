@@ -14,7 +14,8 @@
 
 #include "facade/facade_types.h"
 #include "facade/op_status.h"
-#include "util/fibers/fiber.h"
+#include "util/fibers/fiber2.h"
+#include "util/fibers/synchronization.h"
 
 namespace dfly {
 
@@ -215,7 +216,7 @@ template <typename T> struct AggregateValue {
   }
 
  private:
-  util::fibers_ext::Mutex mu_{};
+  util::fb2::Mutex mu_{};
   T current_{};
 };
 
@@ -319,10 +320,10 @@ class Context : protected Cancellation {
 
  private:
   GenericError err_;
-  util::fibers_ext::Mutex mu_;
+  util::fb2::Mutex mu_;
 
   ErrHandler err_handler_;
-  ::util::fibers_ext::Fiber err_handler_fb_;
+  ::util::fb2::Fiber err_handler_fb_;
 };
 
 struct ScanOpts {

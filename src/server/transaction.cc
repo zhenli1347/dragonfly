@@ -1152,11 +1152,12 @@ void Transaction::UnwatchShardCb(ArgSlice wkeys, bool should_expire, EngineShard
 
 void Transaction::UnlockMultiShardCb(const std::vector<KeyList>& sharded_keys, EngineShard* shard,
                                      uint32_t shard_journals_cnt) {
+#if 0
   auto journal = shard->journal();
   if (journal != nullptr && multi_->shard_journal_write[shard->shard_id()] == true) {
     journal->RecordEntry(txid_, journal::Op::EXEC, db_index_, shard_journals_cnt, {}, true);
   }
-
+#endif
   if (multi_->mode == GLOBAL) {
     shard->shard_lock()->Release(IntentLock::EXCLUSIVE);
   } else {
@@ -1293,16 +1294,16 @@ void Transaction::LogJournalOnShard(EngineShard* shard, journal::Entry::Payload&
   bool is_multi = multi_commands || IsAtomicMulti();
 
   auto opcode = is_multi ? journal::Op::MULTI_COMMAND : journal::Op::COMMAND;
-  journal->RecordEntry(txid_, opcode, db_index_, shard_cnt, std::move(payload), allow_await);
+  // journal->RecordEntry(txid_, opcode, db_index_, shard_cnt, std::move(payload), allow_await);
 }
 
 void Transaction::FinishLogJournalOnShard(EngineShard* shard, uint32_t shard_cnt) const {
   if (multi_) {
     return;
   }
-  auto journal = shard->journal();
+  /*auto journal = shard->journal();
   CHECK(journal);
-  journal->RecordEntry(txid_, journal::Op::EXEC, db_index_, shard_cnt, {}, false);
+  journal->RecordEntry(txid_, journal::Op::EXEC, db_index_, shard_cnt, {}, false);*/
 }
 
 void Transaction::BreakOnShutdown() {

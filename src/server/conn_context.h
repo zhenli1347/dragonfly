@@ -8,7 +8,7 @@
 
 #include "facade/conn_context.h"
 #include "server/common.h"
-#include "util/fibers/fibers_ext.h"
+#include "util/fibers/synchronization.h"
 
 namespace dfly {
 
@@ -82,14 +82,14 @@ struct ConnectionState {
     absl::flat_hash_set<std::string> channels;
     absl::flat_hash_set<std::string> patterns;
 
-    util::fibers_ext::BlockingCounter borrow_token{0};
+    util::fb2::BlockingCounter borrow_token{0};
   };
 
   struct ReplicationInfo {
     // If this server is master, and this connection is from a secondary replica,
     // then it holds positive sync session id.
     uint32_t repl_session_id = 0;
-    uint32_t repl_flow_id = kuint32max;
+    uint32_t repl_flow_id = UINT32_MAX;
     uint32_t repl_listening_port = 0;
   };
 

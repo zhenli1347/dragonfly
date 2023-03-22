@@ -10,7 +10,7 @@
 #include "server/server_family.h"
 #include "server/server_state.h"
 #include "src/facade/dragonfly_connection.h"
-#include "util/proactor_base.h"
+#include "util/fibers/proactor_base.h"
 
 namespace dfly {
 
@@ -56,7 +56,7 @@ void ConnectionContext::ChangeMonitor(bool start) {
 vector<unsigned> ChangeSubscriptions(bool pattern, CmdArgList args, bool to_add, bool to_reply,
                                      ConnectionContext* conn, ChannelStore* store) {
   vector<unsigned> result(to_reply ? args.size() : 0, 0);
-
+#if 0
   auto& conn_state = conn->conn_state;
   if (!to_add && !conn_state.subscribe_info)
     return result;
@@ -99,6 +99,7 @@ vector<unsigned> ChangeSubscriptions(bool pattern, CmdArgList args, bool to_add,
     conn->force_dispatch = false;
   }
 
+#endif
   return result;
 }
 

@@ -18,7 +18,7 @@
 #include "server/common.h"
 #include "server/journal/types.h"
 #include "server/table.h"
-#include "util/fibers/fibers_ext.h"
+// #include "util/fibers/fibers_ext.h"
 
 namespace dfly {
 
@@ -480,15 +480,15 @@ class Transaction {
   DbIndex db_index_{0};
   uint64_t time_now_ms_{0};
 
-  std::atomic<TxId> notify_txid_{kuint64max};
+  std::atomic<TxId> notify_txid_{UINT64_MAX};
   std::atomic_uint32_t use_count_{0}, run_count_{0}, seqlock_{0};
 
   // unique_shard_cnt_ and unique_shard_id_ are accessed only by coordinator thread.
   uint32_t unique_shard_cnt_{0};          // Number of unique shards active
   ShardId unique_shard_id_{kInvalidSid};  // Set if unique_shard_cnt_ = 1
 
-  util::fibers_ext::EventCount blocking_ec_;  // Used to wake blocking transactions.
-  util::fibers_ext::EventCount run_ec_;       // Used to wait for shard callbacks
+  util::fb2::EventCount blocking_ec_;  // Used to wake blocking transactions.
+  util::fb2::EventCount run_ec_;       // Used to wait for shard callbacks
 
   // Transaction coordinator state, written and read by coordinator thread.
   // Can be read by shard threads as long as we respect ordering rules, i.e. when

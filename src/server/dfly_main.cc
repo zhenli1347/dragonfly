@@ -30,9 +30,10 @@
 #include "server/version.h"
 #include "strings/human_readable.h"
 #include "util/accept_server.h"
-#include "util/epoll/epoll_pool.h"
-#include "util/http/http_client.h"
-#include "util/uring/uring_pool.h"
+// #include "util/epoll/epoll_pool.h"
+// #include "util/http/http_client.h"
+#include "util/fibers/fiber2.h"
+#include "util/fibers/uring_pool.h"
 #include "util/varz.h"
 
 #define STRING_PP_NX(A) #A
@@ -105,7 +106,7 @@ namespace dfly {
 
 namespace {
 
-using util::http::TlsClient;
+// using util::http::TlsClient;
 
 std::optional<std::string> GetVersionString(const std::string& version_str) {
   // The server sends a message such as {"latest": "0.12.0"}
@@ -128,7 +129,7 @@ std::optional<std::string> GetRemoteVersion(ProactorBase* proactor, SSL_CTX* ssl
                                             const std::string& ver_header) {
   namespace bh = boost::beast::http;
   using ResponseType = bh::response<bh::string_body>;
-
+#if 0
   bh::request<bh::string_body> req{bh::verb::get, resource, 11 /*http 1.1*/};
   req.set(bh::field::host, host);
   req.set(bh::field::user_agent, ver_header);
@@ -171,19 +172,19 @@ std::optional<std::string> GetRemoteVersion(ProactorBase* proactor, SSL_CTX* ssl
       LOG(WARNING) << "ssl error: " << func_err << "/" << ERR_reason_error_string(ec.value());
     }
   }
-
+#endif
   return nullopt;
 }
 
 struct VersionMonitor {
-  fibers_ext::Fiber version_fiber_;
-  fibers_ext::Done monitor_ver_done_;
+  fb2::Fiber version_fiber_;
+  fb2::Done monitor_ver_done_;
 
   void Run(ProactorPool* proactor_pool);
 
   void Shutdown() {
     monitor_ver_done_.Notify();
-    if (version_fiber_.IsJoinable()) {
+    if (version_fiber_.joinable()) {
       version_fiber_.Join();
     }
   }
@@ -207,14 +208,13 @@ void VersionMonitor::Run(ProactorPool* proactor_pool) {
     return;
   }
 
-  SSL_CTX* ssl_ctx = TlsClient::CreateSslContext();
+  /*SSL_CTX* ssl_ctx = TlsClient::CreateSslContext();
   if (!ssl_ctx) {
     VLOG(1) << "Remote version - failed to create SSL context - cannot run version monitoring";
     return;
-  }
-
-  version_fiber_ =
-      proactor_pool->GetNextProactor()->LaunchFiber([ssl_ctx, this] { RunTask(ssl_ctx); });
+  }*/
+  // version_fiber_ =
+  // proactor_pool->GetNextProactor()->LaunchFiber([ssl_ctx, this] { RunTask(ssl_ctx); });
 }
 
 void VersionMonitor::RunTask(SSL_CTX* ssl_ctx) {
@@ -241,7 +241,7 @@ void VersionMonitor::RunTask(SSL_CTX* ssl_ctx) {
       }
     }
     if (monitor_ver_done_.WaitFor(loop_sleep_time)) {
-      TlsClient::FreeContext(ssl_ctx);
+      // TlsClient::FreeContext(ssl_ctx);
       VLOG(1) << "finish running version monitor task";
       return;
     }
@@ -483,10 +483,10 @@ Usage: dragonfly [FLAGS]
   CHECK_GT(GetFlag(FLAGS_port), 0u);
   mi_stats_reset();
 
-  if (GetFlag(FLAGS_dbnum) > dfly::kMaxDbId) {
+  /*if (GetFlag(FLAGS_dbnum) > dfly::kMaxDbId) {
     LOG(ERROR) << "dbnum is too big. Exiting...";
     return 1;
-  }
+  }*/
 
   string pidfile_path = GetFlag(FLAGS_pidfile);
   if (!pidfile_path.empty()) {
@@ -527,9 +527,9 @@ Usage: dragonfly [FLAGS]
 
   bool use_epoll = ShouldUseEpollAPI(kver);
   if (use_epoll) {
-    pool.reset(new epoll::EpollPool);
+    // pool.reset(new epoll::EpollPool);
   } else {
-    pool.reset(new uring::UringPool(1024));  // 1024 - iouring queue size.
+    pool.reset(new fb2::UringPool(1024));  // 1024 - iouring queue size.
   }
 
   pool->Run();

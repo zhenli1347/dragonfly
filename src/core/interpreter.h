@@ -8,7 +8,7 @@
 #include <string_view>
 
 #include "core/core_types.h"
-#include "util/fibers/event_count.h"
+#include "util/fibers/synchronization.h"
 
 typedef struct lua_State lua_State;
 
@@ -124,7 +124,7 @@ class InterpreterManager {
   void Return(Interpreter*);
 
  private:
-  ::util::fibers_ext::EventCount waker_;
+  ::util::fb2::EventCount waker_;
   std::vector<Interpreter*> available_;
   std::vector<Interpreter> storage_;
 };

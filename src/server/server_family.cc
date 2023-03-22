@@ -28,7 +28,7 @@ extern "C" {
 #include "server/command_registry.h"
 #include "server/conn_context.h"
 #include "server/debugcmd.h"
-#include "server/dflycmd.h"
+// #include "server/dflycmd.h"
 #include "server/engine_shard_set.h"
 #include "server/error.h"
 #include "server/journal/journal.h"
@@ -36,7 +36,7 @@ extern "C" {
 #include "server/memory_cmd.h"
 #include "server/rdb_load.h"
 #include "server/rdb_save.h"
-#include "server/replica.h"
+// #include "server/replica.h"
 #include "server/script_mgr.h"
 #include "server/server_state.h"
 #include "server/tiered_storage.h"
@@ -44,8 +44,9 @@ extern "C" {
 #include "server/version.h"
 #include "strings/human_readable.h"
 #include "util/accept_server.h"
-#include "util/fibers/fiber_file.h"
-#include "util/uring/uring_file.h"
+#include "util/fibers/synchronization.h"
+// #include "util/fibers/fiber_file.h"
+// #include "util/uring/uring_file.h"
 
 using namespace std;
 
@@ -195,14 +196,14 @@ class RdbSnapshot {
   }
 
   bool HasStarted() const {
-    return started_ || (saver_ && saver_->Mode() == SaveMode::SUMMARY);
+    return false;  // started_ || (saver_ && saver_->Mode() == SaveMode::SUMMARY);
   }
 
  private:
   bool started_ = false;
   FiberQueueThreadPool* fq_tp_;
   std::unique_ptr<io::Sink> io_sink_;
-  std::unique_ptr<RdbSaver> saver_;
+  // std::unique_ptr<RdbSaver> saver_;
   RdbTypeFreqMap freq_map_;
 
   Cancellation cll_{};
@@ -220,6 +221,7 @@ io::Result<size_t> LinuxWriteWrapper::WriteSome(const iovec* v, uint32_t len) {
 error_code RdbSnapshot::Start(SaveMode save_mode, const std::string& path,
                               const StringVec& lua_scripts) {
   bool is_direct = false;
+#if 0
   if (fq_tp_) {  // EPOLL
     auto res = util::OpenFiberWriteFile(path, fq_tp_);
     if (!res)
@@ -237,10 +239,12 @@ error_code RdbSnapshot::Start(SaveMode save_mode, const std::string& path,
   saver_.reset(new RdbSaver(io_sink_.get(), save_mode, is_direct));
 
   return saver_->SaveHeader(lua_scripts);
+#endif
+  return error_code();
 }
 
 error_code RdbSnapshot::SaveBody() {
-  return saver_->SaveBody(&cll_, &freq_map_);
+  return error_code{};  // saver_->SaveBody(&cll_, &freq_map_);
 }
 
 error_code RdbSnapshot::Close() {
@@ -252,7 +256,7 @@ error_code RdbSnapshot::Close() {
 }
 
 void RdbSnapshot::StartInShard(EngineShard* shard) {
-  saver_->StartSnapshotInShard(false, &cll_, shard);
+  // saver_->StartSnapshotInShard(false, &cll_, shard);
   started_ = true;
 }
 
@@ -356,9 +360,9 @@ ServerFamily::ServerFamily(Service* service) : service_(*service) {
   start_time_ = time(NULL);
   last_save_info_ = make_shared<LastSaveInfo>();
   last_save_info_->save_time = start_time_;
-  script_mgr_.reset(new ScriptMgr());
-  channel_store_.reset(new ChannelStore());
-  journal_.reset(new journal::Journal());
+  // script_mgr_.reset(new ScriptMgr());
+  // channel_store_.reset(new ChannelStore());
+  // journal_.reset(new journal::Journal());
 
   {
     absl::InsecureBitGen eng;
@@ -383,7 +387,7 @@ void ServerFamily::Init(util::AcceptServer* acceptor, util::ListenerInterface* m
   CHECK(acceptor_ == nullptr);
   acceptor_ = acceptor;
   main_listener_ = main_listener;
-  dfly_cmd_.reset(new DflyCmd(main_listener, this));
+  // dfly_cmd_.reset(new DflyCmd(main_listener, this));
 
   pb_task_ = shard_set->pool()->GetNextProactor();
   if (pb_task_->GetKind() == ProactorBase::EPOLL) {
@@ -422,7 +426,7 @@ void ServerFamily::Init(util::AcceptServer* acceptor, util::ListenerInterface* m
     LOG(INFO) << "Data directory is " << data_folder;
     string load_path = InferLoadFile(data_folder);
     if (!load_path.empty()) {
-      load_result_ = Load(load_path);
+      // load_result_ = Load(load_path);
     }
   } else {
     LOG(ERROR) << "Data directory error: " << file_ec.message();
@@ -443,18 +447,18 @@ void ServerFamily::Init(util::AcceptServer* acceptor, util::ListenerInterface* m
 void ServerFamily::Shutdown() {
   VLOG(1) << "ServerFamily::Shutdown";
 
-  if (load_result_.valid())
-    load_result_.wait();
+  // if (load_result_.valid())
+  //    load_result_.wait();
 
   is_snapshot_done_.Notify();
-  if (snapshot_fiber_.IsJoinable()) {
+  if (snapshot_fiber_.joinable()) {
     snapshot_fiber_.Join();
   }
 
   pb_task_->Await([this] {
     pb_task_->CancelPeriodic(stats_caching_task_);
     stats_caching_task_ = 0;
-
+#if 0
     if (journal_->EnterLameDuck()) {
       auto ec = journal_->Close();
       LOG_IF(ERROR, ec) << "Error closing journal " << ec;
@@ -466,6 +470,7 @@ void ServerFamily::Shutdown() {
     }
 
     dfly_cmd_->Shutdown();
+#endif
   });
 }
 
@@ -512,7 +517,7 @@ fibers_ext::Future<std::error_code> ServerFamily::Load(const std::string& load_p
     LOG(WARNING) << GlobalStateName(new_state) << " in progress, ignored";
     return {};
   }
-
+#endif
 #if 0
   auto& pool = service_.proactor_pool();
   // Deliberately run on all I/O threads to update the state for non-shard threads as well.
@@ -523,6 +528,7 @@ fibers_ext::Future<std::error_code> ServerFamily::Load(const std::string& load_p
   });
 #endif
 
+#if 0
   auto& pool = service_.proactor_pool();
 
   vector<util::fibers_ext::Fiber> load_fibers;
@@ -563,6 +569,7 @@ fibers_ext::Future<std::error_code> ServerFamily::Load(const std::string& load_p
   pool.GetNextProactor()->Dispatch(std::move(load_join_fiber));
 
   return ec_future;
+#endif
 }
 
 void ServerFamily::SnapshotScheduling(const SnapshotSpec& spec) {
@@ -604,6 +611,8 @@ void ServerFamily::SnapshotScheduling(const SnapshotSpec& spec) {
 
 error_code ServerFamily::LoadRdb(const std::string& rdb_file) {
   error_code ec;
+
+#if 0
   io::ReadonlyFileOrError res;
 
   if (fq_threadpool_) {
@@ -627,7 +636,7 @@ error_code ServerFamily::LoadRdb(const std::string& rdb_file) {
   }
 
   service_.SwitchState(GlobalState::LOADING, GlobalState::ACTIVE);
-
+#endif
   return ec;
 }
 
@@ -777,14 +786,17 @@ void ServerFamily::ConfigureMetrics(util::HttpListenerBase* http_base) {
 void ServerFamily::PauseReplication(bool pause) {
   unique_lock lk(replicaof_mu_);
 
-  // Switch to primary mode.
+// Switch to primary mode.
+#if 0
   if (!ServerState::tlocal()->is_master) {
     auto repl_ptr = replica_;
     CHECK(repl_ptr);
     repl_ptr->Pause(pause);
   }
+#endif
 }
 
+#if 0
 std::optional<ReplicaOffsetInfo> ServerFamily::GetReplicaOffsetInfo() {
   unique_lock lk(replicaof_mu_);
 
@@ -796,9 +808,10 @@ std::optional<ReplicaOffsetInfo> ServerFamily::GetReplicaOffsetInfo() {
   }
   return nullopt;
 }
+#endif
 
 void ServerFamily::OnClose(ConnectionContext* cntx) {
-  dfly_cmd_->OnClose(cntx);
+  // dfly_cmd_->OnClose(cntx);
 }
 
 void ServerFamily::StatsMC(std::string_view section, facade::ConnectionContext* cntx) {
@@ -915,7 +928,7 @@ GenericError ServerFamily::DoSave(bool new_version, Transaction* trans) {
 
   vector<unique_ptr<RdbSnapshot>> snapshots;
   absl::flat_hash_map<string_view, size_t> rdb_name_map;
-  fibers_ext::Mutex mu;  // guards rdb_name_map
+  util::fb2::Mutex mu;  // guards rdb_name_map
 
   auto save_cb = [&](unsigned index) {
     auto& snapshot = snapshots[index];
@@ -936,6 +949,7 @@ GenericError ServerFamily::DoSave(bool new_version, Transaction* trans) {
     }
   };
 
+#if 0
   auto get_scripts = [this] {
     auto scripts = script_mgr_->GetAll();
     StringVec script_bodies;
@@ -944,6 +958,7 @@ GenericError ServerFamily::DoSave(bool new_version, Transaction* trans) {
     }
     return script_bodies;
   };
+#endif
 
   // Start snapshots.
   if (new_version) {
@@ -955,7 +970,7 @@ GenericError ServerFamily::DoSave(bool new_version, Transaction* trans) {
 
     // Save summary file.
     {
-      auto scripts = get_scripts();
+      StringVec scripts;  // =  get_scripts();
       auto& snapshot = snapshots[shard_set->size()];
       snapshot.reset(new RdbSnapshot(fq_threadpool_.get()));
 
@@ -984,7 +999,7 @@ GenericError ServerFamily::DoSave(bool new_version, Transaction* trans) {
     path /= filename;  // use / operator to concatenate paths.
 
     snapshots[0].reset(new RdbSnapshot(fq_threadpool_.get()));
-    auto lua_scripts = get_scripts();
+    StringVec lua_scripts;  // = get_scripts();
 
     ec = snapshots[0]->Start(SaveMode::RDB, path.generic_string(), lua_scripts);
 
@@ -1074,7 +1089,7 @@ void ServerFamily::DbSize(CmdArgList args, ConnectionContext* cntx) {
 }
 
 void ServerFamily::BreakOnShutdown() {
-  dfly_cmd_->BreakOnShutdown();
+  // dfly_cmd_->BreakOnShutdown();
 }
 
 string GetPassword() {
@@ -1152,7 +1167,7 @@ void ServerFamily::Client(CmdArgList args, ConnectionContext* cntx) {
 
   if (sub_cmd == "LIST") {
     vector<string> client_info;
-    fibers_ext::Mutex mu;
+    util::fb2::Mutex mu;
     auto cb = [&](util::Connection* conn) {
       facade::Connection* dcon = static_cast<facade::Connection*>(conn);
       string info = dcon->GetClientInfo();
@@ -1190,7 +1205,7 @@ void ServerFamily::Cluster(CmdArgList args, ConnectionContext* cntx) {
   if (!is_emulated_cluster_) {
     return (*cntx)->SendError("CLUSTER commands demands the `cluster_mode` flag set to `emulated`");
   }
-
+#if 0
   if (sub_cmd == "HELP") {
     string_view help_arr[] = {
         "CLUSTER <subcommand> [<arg> [value] [opt] ...]. Subcommands are:",
@@ -1305,6 +1320,7 @@ void ServerFamily::Cluster(CmdArgList args, ConnectionContext* cntx) {
   }
 
   return (*cntx)->SendError(UnknownSubCmd(sub_cmd, "CLUSTER"), kSyntaxErrType);
+#endif
 }
 
 void ServerFamily::Config(CmdArgList args, ConnectionContext* cntx) {
@@ -1335,17 +1351,17 @@ void ServerFamily::Config(CmdArgList args, ConnectionContext* cntx) {
 void ServerFamily::Debug(CmdArgList args, ConnectionContext* cntx) {
   ToUpper(&args[1]);
 
-  DebugCmd dbg_cmd{this, cntx};
+  // DebugCmd dbg_cmd{this, cntx};
 
-  return dbg_cmd.Run(args);
+  // return dbg_cmd.Run(args);
 }
 
 void ServerFamily::Memory(CmdArgList args, ConnectionContext* cntx) {
   ToUpper(&args[1]);
 
-  MemoryCmd mem_cmd{this, cntx};
+  // MemoryCmd mem_cmd{this, cntx};
 
-  return mem_cmd.Run(args);
+  // return mem_cmd.Run(args);
 }
 
 void ServerFamily::Save(CmdArgList args, ConnectionContext* cntx) {
@@ -1389,7 +1405,7 @@ static void MergeInto(const DbSlice::Stats& src, Metrics* dest) {
 Metrics ServerFamily::GetMetrics() const {
   Metrics result;
 
-  fibers_ext::Mutex mu;
+  util::fb2::Mutex mu;
 
   auto cb = [&](ProactorBase* pb) {
     EngineShard* shard = EngineShard::tlocal();
@@ -1406,9 +1422,9 @@ Metrics ServerFamily::GetMetrics() const {
       MergeInto(shard->db_slice().GetStats(), &result);
 
       result.heap_used_bytes += shard->UsedMemory();
-      if (shard->tiered_storage()) {
+      /*if (shard->tiered_storage()) {
         result.tiered_stats += shard->tiered_storage()->GetStats();
-      }
+      }*/
       result.shard_stats += shard->stats();
       result.traverse_ttl_per_sec += shard->GetMovingSum6(EngineShard::TTL_TRAVERSE);
       result.delete_ttl_per_sec += shard->GetMovingSum6(EngineShard::TTL_DELETE);
@@ -1596,19 +1612,22 @@ void ServerFamily::Info(CmdArgList args, ConnectionContext* cntx) {
     if (etl.is_master) {
       append("role", "master");
       append("connected_slaves", m.conn_stats.num_replicas);
+#if 0
       auto replicas = dfly_cmd_->GetReplicasRoleInfo();
       for (size_t i = 0; i < replicas.size(); i++) {
         auto& r = replicas[i];
         // e.g. slave0:ip=172.19.0.3,port=6379
         append(StrCat("slave", i), StrCat("ip=", r.address, ",port=", r.listening_port));
       }
+#endif
       append("master_replid", master_id_);
     } else {
       append("role", "replica");
 
-      // it's safe to access replica_ because replica_ is created before etl.is_master set to
-      // false and cleared after etl.is_master is set to true. And since the code here that checks
-      // for is_master and copies shared_ptr is atomic, it1 should be correct.
+// it's safe to access replica_ because replica_ is created before etl.is_master set to
+// false and cleared after etl.is_master is set to true. And since the code here that checks
+// for is_master and copies shared_ptr is atomic, it1 should be correct.
+#if 0
       auto replica_ptr = replica_;
       Replica::Info rinfo = replica_ptr->GetInfo();
       append("master_host", rinfo.host);
@@ -1618,6 +1637,7 @@ void ServerFamily::Info(CmdArgList args, ConnectionContext* cntx) {
       append("master_link_status", link);
       append("master_last_io_seconds_ago", rinfo.master_last_io_sec);
       append("master_sync_in_progress", rinfo.sync_in_progress);
+#endif
     }
   }
 
@@ -1734,19 +1754,19 @@ std::string ServerFamily::BuildClusterNodeReply(ConnectionContext* cntx) const {
     std::string cluster_announce_ip = GetFlag(FLAGS_cluster_announce_ip);
     std::string preferred_endpoint =
         cluster_announce_ip.empty() ? cntx->owner()->LocalBindAddress() : cluster_announce_ip;
-    auto vec = dfly_cmd_->GetReplicasRoleInfo();
+    // auto vec = dfly_cmd_->GetReplicasRoleInfo();
     auto my_port = GetFlag(FLAGS_port);
-    const char* connect_state = vec.empty() ? "disconnected" : "connected";
+    const char* connect_state = /*vec.empty() ? "disconnected" :*/ "connected";
     std::string msg = absl::StrCat(master_id(), " ", preferred_endpoint, ":", my_port, "@", my_port,
                                    " myself,master - 0 ", epoch_master_time, " 1 ", connect_state,
                                    " 0-16383\r\n");
-    if (!vec.empty()) {  // info about the replica
+    /*if (!vec.empty()) {  // info about the replica
       const auto& info = vec[0];
       absl::StrAppend(&msg, etl.remote_client_id_, " ", info.address, ":", info.listening_port, "@",
                       info.listening_port, " slave 0 ", master_id(), " 1 ", connect_state, "\r\n");
-    }
+    }*/
     return msg;
-  } else {
+  } /*else {
     unique_lock lk(replicaof_mu_);  // make sure that this pointer stays alive!
     auto replica_ptr = replica_;
     Replica::Info info = replica_ptr->GetInfo();
@@ -1760,7 +1780,8 @@ std::string ServerFamily::BuildClusterNodeReply(ConnectionContext* cntx) const {
     absl::StrAppend(&msg, replica_ptr->MasterId(), " ", info.host, ":", info.port, "@", info.port,
                     " master - 0 ", epoch_master_time, " 1 ", connect_state, " 0-16383\r\n");
     return msg;
-  }
+  }*/
+  return string{};
 }
 
 void ServerFamily::ReplicaOf(CmdArgList args, ConnectionContext* cntx) {
@@ -1771,7 +1792,7 @@ void ServerFamily::ReplicaOf(CmdArgList args, ConnectionContext* cntx) {
   if (absl::EqualsIgnoreCase(host, "no") && absl::EqualsIgnoreCase(port_s, "one")) {
     // use this lock as critical section to prevent concurrent replicaof commands running.
     unique_lock lk(replicaof_mu_);
-
+#if 0
     if (!ServerState::tlocal()->is_master) {
       auto repl_ptr = replica_;
       CHECK(repl_ptr);
@@ -1781,7 +1802,7 @@ void ServerFamily::ReplicaOf(CmdArgList args, ConnectionContext* cntx) {
       replica_->Stop();
       replica_.reset();
     }
-
+#endif
     return (*cntx)->SendOk();
   }
 
@@ -1792,9 +1813,10 @@ void ServerFamily::ReplicaOf(CmdArgList args, ConnectionContext* cntx) {
     return;
   }
 
-  auto new_replica = make_shared<Replica>(string(host), port, &service_, master_id());
+  // auto new_replica = make_shared<Replica>(string(host), port, &service_, master_id());
 
   unique_lock lk(replicaof_mu_);
+#if 0
   if (replica_) {
     replica_->Stop();  // NOTE: consider introducing update API flow.
   } else {
@@ -1802,8 +1824,8 @@ void ServerFamily::ReplicaOf(CmdArgList args, ConnectionContext* cntx) {
 
     pool.AwaitFiberOnAll([&](util::ProactorBase* pb) { ServerState::tlocal()->is_master = false; });
   }
-
   replica_.swap(new_replica);
+#endif
 
   GlobalState new_state = service_.SwitchState(GlobalState::ACTIVE, GlobalState::LOADING);
   if (new_state != GlobalState::LOADING) {
@@ -1823,7 +1845,7 @@ void ServerFamily::ReplicaOf(CmdArgList args, ConnectionContext* cntx) {
 
   // Replica sends response in either case. No need to send response in this function.
   // It's a bit confusing but simpler.
-  if (!replica_->Start(cntx)) {
+  /*if (!replica_->Start(cntx)) {
     service_.SwitchState(GlobalState::LOADING, GlobalState::ACTIVE);
     replica_.reset();
   }
@@ -1831,6 +1853,7 @@ void ServerFamily::ReplicaOf(CmdArgList args, ConnectionContext* cntx) {
   bool is_master = !replica_;
   pool.AwaitFiberOnAll(
       [&](util::ProactorBase* pb) { ServerState::tlocal()->is_master = is_master; });
+*/
 }
 
 void ServerFamily::ReplConf(CmdArgList args, ConnectionContext* cntx) {
@@ -1844,6 +1867,7 @@ void ServerFamily::ReplConf(CmdArgList args, ConnectionContext* cntx) {
     std::string_view arg = ArgS(args, i + 1);
     if (cmd == "CAPA") {
       if (arg == "dragonfly" && args.size() == 3 && i == 1) {
+#if 0
         uint32_t sid = dfly_cmd_->CreateSyncSession(cntx);
         cntx->owner()->SetName(absl::StrCat("repl_ctrl_", sid));
 
@@ -1854,11 +1878,11 @@ void ServerFamily::ReplConf(CmdArgList args, ConnectionContext* cntx) {
           ServerState::tl_connection_stats()->num_replicas += 1;
         }
         cntx->replica_conn = true;
-
+#endif
         // The response for 'capa dragonfly' is: <masterid> <syncid> <numthreads>
         (*cntx)->StartArray(3);
         (*cntx)->SendSimpleString(master_id_);
-        (*cntx)->SendSimpleString(sync_id);
+        // (*cntx)->SendSimpleString(sync_id);
         (*cntx)->SendLong(shard_set->pool()->size());
         return;
       }
@@ -1891,6 +1915,7 @@ void ServerFamily::Role(CmdArgList args, ConnectionContext* cntx) {
   if (etl.is_master) {
     (*cntx)->StartArray(2);
     (*cntx)->SendBulkString("master");
+#if 0
     auto vec = dfly_cmd_->GetReplicasRoleInfo();
     (*cntx)->StartArray(vec.size());
     for (auto& data : vec) {
@@ -1898,8 +1923,9 @@ void ServerFamily::Role(CmdArgList args, ConnectionContext* cntx) {
       (*cntx)->SendBulkString(data.address);
       (*cntx)->SendBulkString(data.state);
     }
-
+#endif
   } else {
+#if 0
     auto replica_ptr = replica_;
     Replica::Info rinfo = replica_ptr->GetInfo();
     (*cntx)->StartArray(4);
@@ -1913,6 +1939,7 @@ void ServerFamily::Role(CmdArgList args, ConnectionContext* cntx) {
     } else {
       (*cntx)->SendBulkString("stable sync");
     }
+#endif
   }
 }
 
@@ -1920,7 +1947,7 @@ void ServerFamily::Script(CmdArgList args, ConnectionContext* cntx) {
   args.remove_prefix(1);
   ToUpper(&args.front());
 
-  script_mgr_->Run(std::move(args), cntx);
+  // script_mgr_->Run(std::move(args), cntx);
 }
 
 void ServerFamily::Sync(CmdArgList args, ConnectionContext* cntx) {
@@ -1972,7 +1999,7 @@ void ServerFamily::SyncGeneric(std::string_view repl_master_id, uint64_t offs,
 }
 
 void ServerFamily::Dfly(CmdArgList args, ConnectionContext* cntx) {
-  dfly_cmd_->Run(args, cntx);
+  // dfly_cmd_->Run(args, cntx);
 }
 
 #define HFUNC(x) SetHandler(HandlerFunc(this, &ServerFamily::x))

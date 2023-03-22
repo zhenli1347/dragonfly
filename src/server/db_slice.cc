@@ -10,12 +10,11 @@ extern "C" {
 
 #include "base/logging.h"
 #include "server/engine_shard_set.h"
-#include "server/journal/journal.h"
+// #include "server/journal/journal.h"
 #include "server/server_state.h"
-#include "server/tiered_storage.h"
-#include "util/fiber_sched_algo.h"
-#include "util/fibers/fiber.h"
-#include "util/proactor_base.h"
+// #include "server/tiered_storage.h"
+// #include "util/fiber_sched_algo.h"
+#include "util/fibers/proactor_base.h"
 
 namespace dfly {
 
@@ -24,6 +23,7 @@ using namespace util;
 using facade::OpStatus;
 
 namespace {
+class FiberAtomicGuard {};
 
 constexpr auto kPrimeSegmentSize = PrimeTable::kSegBytes;
 constexpr auto kExpireSegmentSize = ExpireTable::kSegBytes;
@@ -42,7 +42,9 @@ void PerformDeletion(PrimeIterator del_it, ExpireIterator exp_it, EngineShard* s
   }
 
   DbTableStats& stats = table->stats;
+
   const PrimeValue& pv = del_it->second;
+#if 0
   if (pv.IsExternal()) {
     auto [offset, size] = pv.GetExternalSlice();
 
@@ -51,7 +53,7 @@ void PerformDeletion(PrimeIterator del_it, ExpireIterator exp_it, EngineShard* s
     TieredStorage* tiered = shard->tiered_storage();
     tiered->Free(offset, size);
   }
-
+#endif
   size_t value_heap_size = pv.MallocUsed();
   stats.inline_keys -= del_it->first.IsInline();
   stats.obj_memory_usage -= (del_it->first.MallocUsed() + value_heap_size);
@@ -504,7 +506,7 @@ void DbSlice::FlushDb(DbIndex db_ind) {
       mi_heap_collect(ServerState::tlocal()->data_heap(), true);
     };
 
-    util::MakeFiber(std::move(cb)).Detach();
+    fb2::Fiber(std::move(cb)).Detach();
 
     return;
   }
@@ -524,7 +526,7 @@ void DbSlice::FlushDb(DbIndex db_ind) {
     }
   }
 
-  MakeFiber([all_dbs = std::move(all_dbs)]() mutable {
+  fb2::Fiber([all_dbs = std::move(all_dbs)]() mutable {
     for (auto& db : all_dbs) {
       db.reset();
     }
@@ -750,6 +752,7 @@ void DbSlice::PreUpdate(DbIndex db_ind, PrimeIterator it) {
 
   if (it->second.ObjType() == OBJ_STRING) {
     stats->strval_memory_usage -= value_heap_size;
+#if 0
     if (it->second.IsExternal()) {
       // We assume here that the operation code either loaded the entry into memory
       // before calling to PreUpdate or it does not need to read it at all.
@@ -765,6 +768,7 @@ void DbSlice::PreUpdate(DbIndex db_ind, PrimeIterator it) {
       TieredStorage* tiered = shard_owner()->tiered_storage();
       tiered->CancelIo(db_ind, it);
     }
+#endif
   }
 
   it.SetVersion(NextVersion());

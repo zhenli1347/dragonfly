@@ -22,18 +22,18 @@ extern "C" {
 #include "server/bitops_family.h"
 #include "server/conn_context.h"
 #include "server/error.h"
-#include "server/generic_family.h"
-#include "server/hset_family.h"
-#include "server/json_family.h"
+// #include "server/generic_family.h"
+// #include "server/hset_family.h"
+// #include "server/json_family.h"
 #include "server/list_family.h"
-#include "server/script_mgr.h"
+// #include "server/script_mgr.h"
 #include "server/server_state.h"
 #include "server/set_family.h"
-#include "server/stream_family.h"
+// #include "server/stream_family.h"
 #include "server/string_family.h"
 #include "server/transaction.h"
 #include "server/version.h"
-#include "server/zset_family.h"
+// #include "server/zset_family.h"
 #include "util/html/sorted_table.h"
 #include "util/varz.h"
 
@@ -59,7 +59,7 @@ namespace dfly {
 using namespace util;
 using base::VarzValue;
 using ::boost::intrusive_ptr;
-namespace fibers = ::boost::fibers;
+// namespace fibers = ::boost::fibers;
 using absl::GetFlag;
 using absl::StrCat;
 using namespace facade;
@@ -549,7 +549,7 @@ void Service::Init(util::AcceptServer* acceptor, util::ListenerInterface* main_i
 
   request_latency_usec.Init(&pp_);
   StringFamily::Init(&pp_);
-  GenericFamily::Init(&pp_);
+  // GenericFamily::Init(&pp_);
   server_family_.Init(acceptor, main_interface);
 }
 
@@ -566,7 +566,7 @@ void Service::Shutdown() {
   // to shutdown all the runtime components that depend on EngineShard.
   server_family_.Shutdown();
   StringFamily::Shutdown();
-  GenericFamily::Shutdown();
+  // GenericFamily::Shutdown();
 
   engine_varz.reset();
   request_latency_usec.Shutdown();
@@ -575,7 +575,7 @@ void Service::Shutdown() {
   pp_.Await([](ProactorBase* pb) { ServerState::tlocal()->Destroy(); });
 
   // wait for all the pending callbacks to stop.
-  fibers_ext::SleepFor(10ms);
+  ThisFiber::SleepFor(10ms);
 }
 
 static void MultiSetError(ConnectionContext* cntx) {
@@ -990,8 +990,8 @@ void Service::Watch(CmdArgList args, ConnectionContext* cntx) {
       shard->db_slice().RegisterWatchedKey(cntx->db_index(), k, &exec_info);
     }
 
-    auto res = GenericFamily::OpExists(t->GetOpArgs(shard), largs);
-    keys_existed.fetch_add(res.value_or(0), memory_order_relaxed);
+    // auto res = GenericFamily::OpExists(t->GetOpArgs(shard), largs);
+    // keys_existed.fetch_add(res.value_or(0), memory_order_relaxed);
     return OpStatus::OK;
   };
   cntx->transaction->ScheduleSingleHop(std::move(cb));
@@ -1038,11 +1038,12 @@ void Service::Eval(CmdArgList args, ConnectionContext* cntx) {
   auto interpreter = ss->BorrowInterpreter();
   absl::Cleanup clean = [ss, interpreter]() { ss->ReturnInterpreter(interpreter); };
 
+#if 0
   auto res = server_family_.script_mgr()->Insert(body, interpreter);
   if (!res)
     return (*cntx)->SendError(res.error().Format(), facade::kScriptErrType);
-
-  string sha{move(res.value())};
+#endif
+  string sha;  // {move(res.value())};
 
   EvalArgs eval_args;
   eval_args.sha = sha;
@@ -1088,6 +1089,7 @@ vector<bool> DetermineKeyShards(CmdArgList keys) {
   return out;
 }
 
+#if 0
 optional<ScriptMgr::ScriptParams> LoadScipt(string_view sha, ScriptMgr* script_mgr,
                                             Interpreter* interpreter) {
   auto ss = ServerState::tlocal();
@@ -1104,10 +1106,11 @@ optional<ScriptMgr::ScriptParams> LoadScipt(string_view sha, ScriptMgr* script_m
     return script_data;
   }
 
-  auto params = ss->GetScriptParams(sha);
+  //auto params = ss->GetScriptParams(sha);
   CHECK(params);  // We update all caches from script manager
   return params;
 }
+#endif
 
 // Determine multi mode based on script params.
 Transaction::MultiMode DetermineMultiMode(ScriptMgr::ScriptParams params) {
@@ -1119,6 +1122,7 @@ Transaction::MultiMode DetermineMultiMode(ScriptMgr::ScriptParams params) {
     return Transaction::NON_ATOMIC;
 }
 
+#if 0
 // Start multi transaction for eval. Returns true if transaction was scheduled.
 // Skips scheduling if multi mode requies declaring keys, but no keys were declared.
 bool StartMultiEval(DbIndex dbid, CmdArgList keys, ScriptMgr::ScriptParams params,
@@ -1148,6 +1152,7 @@ bool StartMultiEval(DbIndex dbid, CmdArgList keys, ScriptMgr::ScriptParams param
 
   return false;
 }
+#endif
 
 void Service::EvalInternal(const EvalArgs& eval_args, Interpreter* interpreter,
                            ConnectionContext* cntx) {
@@ -1158,9 +1163,9 @@ void Service::EvalInternal(const EvalArgs& eval_args, Interpreter* interpreter,
     return (*cntx)->SendError(facade::kScriptNotFound);
   }
 
-  auto params = LoadScipt(eval_args.sha, server_family_.script_mgr(), interpreter);
-  if (!params)
-    return (*cntx)->SendError(facade::kScriptNotFound);
+  // auto params = LoadScipt(eval_args.sha, server_family_.script_mgr(), interpreter);
+  // if (!params)
+  //  return (*cntx)->SendError(facade::kScriptNotFound);
 
   string error;
 
@@ -1175,7 +1180,8 @@ void Service::EvalInternal(const EvalArgs& eval_args, Interpreter* interpreter,
   }
   DCHECK(cntx->transaction);
 
-  bool scheduled = StartMultiEval(cntx->db_index(), eval_args.keys, *params, cntx->transaction);
+  bool scheduled =
+      false;  // StartMultiEval(cntx->db_index(), eval_args.keys, *params, cntx->transaction);
 
   interpreter->SetGlobalArray("KEYS", eval_args.keys);
   interpreter->SetGlobalArray("ARGV", eval_args.args);
@@ -1232,8 +1238,8 @@ bool CheckWatchedKeyExpiry(ConnectionContext* cntx, const CommandRegistry& regis
   atomic_uint32_t watch_exist_count{0};
   auto cb = [&watch_exist_count](Transaction* t, EngineShard* shard) {
     ArgSlice args = t->GetShardArgs(shard->shard_id());
-    auto res = GenericFamily::OpExists(t->GetOpArgs(shard), args);
-    watch_exist_count.fetch_add(res.value_or(0), memory_order_relaxed);
+    // auto res = GenericFamily::OpExists(t->GetOpArgs(shard), args);
+    watch_exist_count.fetch_add(0, memory_order_relaxed);
 
     return OpStatus::OK;
   };
@@ -1408,14 +1414,16 @@ void Service::Exec(CmdArgList args, ConnectionContext* cntx) {
 
 void Service::Publish(CmdArgList args, ConnectionContext* cntx) {
   auto* store = server_family_.channel_store();
-  string_view channel = ArgS(args, 1);
 
+  string_view channel = ArgS(args, 1);
+  atomic_uint32_t published{0};
+#if 0
   shared_ptr<string> msg_ptr = make_shared<string>(ArgS(args, 2));
   shared_ptr<string> channel_ptr = make_shared<string>(channel);
 
   auto clients = store->FetchSubscribers(channel);
 
-  atomic_uint32_t published{0};
+
   auto cb = [&published, &clients, msg_ptr, channel_ptr](unsigned idx, util::ProactorBase*) {
     auto it = lower_bound(clients.begin(), clients.end(), idx, ChannelStore::Subscriber::ByThread);
     while (it != clients.end() && it->thread_id == idx) {
@@ -1432,15 +1440,17 @@ void Service::Publish(CmdArgList args, ConnectionContext* cntx) {
   for (auto& c : clients) {
     c.borrow_token.Dec();
   }
-
+#endif
   (*cntx)->SendLong(published.load(memory_order_relaxed));
 }
 
 void Service::Subscribe(CmdArgList args, ConnectionContext* cntx) {
   args.remove_prefix(1);
-
+#if 0
   cntx->ChangeSubscription(server_family_.channel_store(), true /*add*/, true /* reply*/,
                            std::move(args));
+#endif
+  (*cntx)->SendLong(0);
 }
 
 void Service::Unsubscribe(CmdArgList args, ConnectionContext* cntx) {
@@ -1483,11 +1493,12 @@ void Service::Function(CmdArgList args, ConnectionContext* cntx) {
 }
 
 void Service::PubsubChannels(string_view pattern, ConnectionContext* cntx) {
-  (*cntx)->SendStringArr(server_family_.channel_store()->ListChannels(pattern));
+  // (*cntx)->SendStringArr(server_family_.channel_store()->ListChannels(pattern));
+  return (*cntx)->SendOk();
 }
 
 void Service::PubsubPatterns(ConnectionContext* cntx) {
-  size_t pattern_count = server_family_.channel_store()->PatternCount();
+  size_t pattern_count = 0;  // server_family_.channel_store()->PatternCount();
 
   (*cntx)->SendLong(pattern_count);
 }
@@ -1640,15 +1651,15 @@ void Service::RegisterCommands() {
       << CI{"MONITOR", CO::ADMIN, 1, 0, 0, 0}.MFUNC(Monitor)
       << CI{"PUBSUB", CO::LOADING | CO::FAST, -1, 0, 0, 0}.MFUNC(Pubsub);
 
-  StreamFamily::Register(&registry_);
+  // StreamFamily::Register(&registry_);
   StringFamily::Register(&registry_);
-  GenericFamily::Register(&registry_);
+  // GenericFamily::Register(&registry_);
   ListFamily::Register(&registry_);
-  SetFamily::Register(&registry_);
-  HSetFamily::Register(&registry_);
-  ZSetFamily::Register(&registry_);
-  JsonFamily::Register(&registry_);
-  BitOpsFamily::Register(&registry_);
+  // SetFamily::Register(&registry_);
+  // HSetFamily::Register(&registry_);
+  // ZSetFamily::Register(&registry_);
+  // JsonFamily::Register(&registry_);
+  // BitOpsFamily::Register(&registry_);
 
   server_family_.Register(&registry_);
 

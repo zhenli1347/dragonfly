@@ -8,9 +8,9 @@
 
 #include "facade/conn_context.h"
 #include "facade/redis_parser.h"
-#include "server/channel_store.h"
+// #include "server/channel_store.h"
 #include "server/engine_shard_set.h"
-#include "util/fibers/fiber.h"
+#include "util/fibers/fiber2.h"
 #include "util/proactor_pool.h"
 
 namespace util {
@@ -85,7 +85,7 @@ class ServerFamily {
   Metrics GetMetrics() const;
 
   ScriptMgr* script_mgr() {
-    return script_mgr_.get();
+    return nullptr;  // script_mgr_.get();
   }
 
   void StatsMC(std::string_view section, facade::ConnectionContext* cntx);
@@ -101,7 +101,7 @@ class ServerFamily {
 
   // Load snapshot from file (.rdb file or summary.dfs file) and return
   // future with error_code.
-  util::fibers_ext::Future<std::error_code> Load(const std::string& file_name);
+  std::error_code Load(const std::string& file_name);
 
   // used within tests.
   bool IsSaving() const {
@@ -118,11 +118,11 @@ class ServerFamily {
   }
 
   journal::Journal* journal() {
-    return journal_.get();
+    return nullptr;  // journal_.get();
   }
 
   ChannelStore* channel_store() {
-    return channel_store_.get();
+    return nullptr;  // return channel_store_.get();
   }
 
   void OnClose(ConnectionContext* cntx);
@@ -166,8 +166,8 @@ class ServerFamily {
 
   void SnapshotScheduling(const SnapshotSpec& time);
 
-  util::fibers_ext::Fiber snapshot_fiber_;
-  util::fibers_ext::Future<std::error_code> load_result_;
+  util::fb2::Fiber snapshot_fiber_;
+  // boost::fibers::future<std::error_code> load_result_;
 
   uint32_t stats_caching_task_ = 0;
   Service& service_;
@@ -176,13 +176,13 @@ class ServerFamily {
   util::ListenerInterface* main_listener_ = nullptr;
   util::ProactorBase* pb_task_ = nullptr;
 
-  mutable util::fibers_ext::Mutex replicaof_mu_, save_mu_;
-  std::shared_ptr<Replica> replica_;  // protected by replica_of_mu_
+  mutable util::fb2::Mutex replicaof_mu_, save_mu_;
+  // std::shared_ptr<Replica> replica_;  // protected by replica_of_mu_
 
-  std::unique_ptr<ScriptMgr> script_mgr_;
-  std::unique_ptr<journal::Journal> journal_;
-  std::unique_ptr<DflyCmd> dfly_cmd_;
-  std::unique_ptr<ChannelStore> channel_store_;
+  // std::unique_ptr<ScriptMgr> script_mgr_;
+  // std::unique_ptr<journal::Journal> journal_;
+  // std::unique_ptr<DflyCmd> dfly_cmd_;
+  // std::unique_ptr<ChannelStore> channel_store_;
 
   std::string master_id_;
 

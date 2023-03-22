@@ -175,13 +175,13 @@ void RecordJournalFinish(const OpArgs& op_args, uint32_t shard_cnt) {
 void RecordExpiry(DbIndex dbid, string_view key) {
   auto journal = EngineShard::tlocal()->journal();
   CHECK(journal);
-  journal->RecordEntry(0, journal::Op::EXPIRED, dbid, 1, make_pair("DEL", ArgSlice{key}), false);
+  // journal->RecordEntry(0, journal::Op::EXPIRED, dbid, 1, make_pair("DEL", ArgSlice{key}), false);
 }
 
 void TriggerJournalWriteToSink() {
   auto journal = EngineShard::tlocal()->journal();
   CHECK(journal);
-  journal->RecordEntry(0, journal::Op::NOOP, 0, 0, {}, true);
+  // journal->RecordEntry(0, journal::Op::NOOP, 0, 0, {}, true);
 }
 
 #define ADD(x) (x) += o.x
@@ -297,7 +297,7 @@ GenericError Context::SwitchErrorHandler(ErrHandler handler) {
 }
 
 void Context::JoinErrorHandler() {
-  if (err_handler_fb_.IsJoinable())
+  if (err_handler_fb_.joinable())
     err_handler_fb_.Join();
 }
 
@@ -308,10 +308,10 @@ GenericError Context::ReportErrorInternal(GenericError&& err) {
   err_ = std::move(err);
 
   // This context is either new or was Reset, where the handler was joined
-  CHECK(!err_handler_fb_.IsJoinable());
+  CHECK(!err_handler_fb_.joinable());
 
   if (err_handler_)
-    err_handler_fb_ = util::fibers_ext::Fiber{err_handler_, err_};
+    err_handler_fb_ = util::fb2::Fiber{"", err_handler_, err_};
 
   Cancellation::Cancel();
   return err_;

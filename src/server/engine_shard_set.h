@@ -18,7 +18,7 @@ extern "C" {
 #include "core/tx_queue.h"
 #include "server/db_slice.h"
 #include "util/fibers/fiberqueue_threadpool.h"
-#include "util/fibers/fibers_ext.h"
+#include "util/fibers/fiber2.h"
 #include "util/proactor_pool.h"
 #include "util/sliding_counter.h"
 
@@ -109,9 +109,9 @@ class EngineShard {
   // Returns used memory for this shard.
   size_t UsedMemory() const;
 
-  TieredStorage* tiered_storage() {
+  /*TieredStorage* tiered_storage() {
     return tiered_storage_.get();
-  }
+  }*/
 
   BlockingController* EnsureBlockingController();
 
@@ -189,7 +189,7 @@ class EngineShard {
   bool DoDefrag();
 
   ::util::fibers_ext::FiberQueue queue_;
-  util::fibers_ext::Fiber fiber_q_;
+  util::fb2::Fiber fiber_q_;
 
   TxQueue txq_;
   MiMemoryResource mi_resource_;
@@ -207,11 +207,11 @@ class EngineShard {
   IntentLock shard_lock_;
 
   uint32_t defrag_task_ = 0;
-  ::util::fibers_ext::Fiber fiber_periodic_;
+  util::fb2::Fiber fiber_periodic_;
   ::util::fibers_ext::Done fiber_periodic_done_;
 
   DefragTaskState defrag_state_;
-  std::unique_ptr<TieredStorage> tiered_storage_;
+  // std::unique_ptr<TieredStorage> tiered_storage_;
   std::unique_ptr<BlockingController> blocking_controller_;
 
   using Counter = util::SlidingCounter<7>;
@@ -275,7 +275,7 @@ class EngineShardSet {
   // The functions running inside the shard queue run atomically (sequentially)
   // with respect each other on the same shard.
   template <typename U> void AwaitRunningOnShardQueue(U&& func) {
-    util::fibers_ext::BlockingCounter bc{unsigned(shard_queue_.size())};
+    util::fb2::BlockingCounter bc{unsigned(shard_queue_.size())};
     for (size_t i = 0; i < shard_queue_.size(); ++i) {
       Add(i, [&func, bc]() mutable {
         func(EngineShard::tlocal());
@@ -299,7 +299,7 @@ class EngineShardSet {
 
 template <typename U, typename P>
 void EngineShardSet::RunBriefInParallel(U&& func, P&& pred) const {
-  util::fibers_ext::BlockingCounter bc{0};
+  util::fb2::BlockingCounter bc{0};
 
   for (uint32_t i = 0; i < size(); ++i) {
     if (!pred(i))
@@ -316,7 +316,7 @@ void EngineShardSet::RunBriefInParallel(U&& func, P&& pred) const {
 }
 
 template <typename U> void EngineShardSet::RunBlockingInParallel(U&& func) {
-  util::fibers_ext::BlockingCounter bc{size()};
+  util::fb2::BlockingCounter bc{size()};
 
   for (uint32_t i = 0; i < size(); ++i) {
     util::ProactorBase* dest = pp_->at(i);
