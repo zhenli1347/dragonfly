@@ -6,7 +6,7 @@ if (DF_USE_SSL)
   target_compile_definitions(dfly_facade PRIVATE DFLY_USE_SSL)
 endif()
 
-cxx_link(dfly_facade base uring_fiber_lib fibers_ext strings_lib http_server_lib
+cxx_link(dfly_facade base fibers2 strings_lib http_server_lib
          ${TLS_LIB} TRDP::mimalloc TRDP::dconv)
 
 add_library(facade_test facade_test.cc)

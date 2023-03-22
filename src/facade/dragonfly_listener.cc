@@ -50,6 +50,22 @@ using absl::GetFlag;
 
 namespace {
 
+// GLIBC/MUSL has 2 flavors of strerror_r.
+// this wrappers work around these incompatibilities.
+inline char const* strerror_r_helper(char const* r, char const*) noexcept {
+  return r;
+}
+
+inline char const* strerror_r_helper(int r, char const* buffer) noexcept {
+  return r == 0 ? buffer : "Unknown error";
+}
+
+inline std::string SafeErrorMessage(int ev) noexcept {
+  char buf[128];
+
+  return strerror_r_helper(strerror_r(ev, buf, sizeof(buf)), buf);
+}
+
 #ifdef DFLY_USE_SSL
 // To connect: openssl s_client  -cipher "ADH:@SECLEVEL=0" -state -crlf  -connect 127.0.0.1:6380
 static SSL_CTX* CreateSslCntx() {
@@ -65,9 +81,8 @@ static SSL_CTX* CreateSslCntx() {
 
     // you can still connect with redis-cli with :
     // redis-cli --tls --insecure --tls-ciphers "ADH:@SECLEVEL=0"
-    LOG(WARNING)
-        << "tls-key-file not set, no keys are loaded and anonymous ciphers are enabled. "
-        << "Do not use in production!";
+    LOG(WARNING) << "tls-key-file not set, no keys are loaded and anonymous ciphers are enabled. "
+                 << "Do not use in production!";
   } else {  // tls_key_file is set.
     CHECK_EQ(1, SSL_CTX_use_PrivateKey_file(ctx, tls_key_file.c_str(), SSL_FILETYPE_PEM));
     const auto& tls_cert_file = GetFlag(FLAGS_tls_cert_file);
@@ -126,7 +141,6 @@ bool ConfigureKeepAlive(int fd, unsigned interval_sec) {
 }  // namespace
 
 Listener::Listener(Protocol protocol, ServiceInterface* si) : service_(si), protocol_(protocol) {
-
 #ifdef DFLY_USE_SSL
   if (GetFlag(FLAGS_tls)) {
     OPENSSL_init_ssl(OPENSSL_INIT_SSL_DEFAULT, NULL);
@@ -154,7 +168,7 @@ error_code Listener::ConfigureServerSocket(int fd) {
   constexpr int kInterval = 300;  // 300 seconds is ok to start checking for liveness.
 
   if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val)) < 0) {
-    LOG(WARNING) << "Could not set reuse addr on socket " << detail::SafeErrorMessage(errno);
+    LOG(WARNING) << "Could not set reuse addr on socket " << SafeErrorMessage(errno);
   }
   bool success = ConfigureKeepAlive(fd, kInterval);
 
@@ -167,7 +181,7 @@ error_code Listener::ConfigureServerSocket(int fd) {
     // Ignore the error on UDS.
     if (getsockopt(fd, SOL_SOCKET, SO_DOMAIN, &socket_type, &length) != 0 ||
         socket_type != AF_UNIX) {
-      LOG(WARNING) << "Could not configure keep alive " << detail::SafeErrorMessage(myerr);
+      LOG(WARNING) << "Could not configure keep alive " << SafeErrorMessage(myerr);
     }
   }
 

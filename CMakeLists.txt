@@ -20,9 +20,11 @@ include(third_party)
 include(internal)
 
 include_directories(src)
+option(USE_FB2 "" ON)
 include_directories(helio)
 
 add_subdirectory(helio)
+add_definitions(-DUSE_FB2)
 add_subdirectory(src)
 
 include(cmake/Packing.cmake)

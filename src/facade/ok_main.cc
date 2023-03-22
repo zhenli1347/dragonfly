@@ -7,7 +7,8 @@
 #include "facade/dragonfly_listener.h"
 #include "facade/service_interface.h"
 #include "util/accept_server.h"
-#include "util/uring/uring_pool.h"
+// #include "util/uring/uring_pool.h"
+#include "util/fibers/uring_pool.h"
 
 ABSL_FLAG(uint32_t, port, 6379, "server port");
 
@@ -59,7 +60,7 @@ int main(int argc, char* argv[]) {
 
   CHECK_GT(GetFlag(FLAGS_port), 0u);
 
-  uring::UringPool pp{1024};
+  fb2::UringPool pp{1024};
   pp.Run();
 
   AcceptServer acceptor(&pp);

@@ -14,8 +14,8 @@
 #include "facade/memcache_parser.h"
 #include "facade/redis_parser.h"
 #include "facade/service_interface.h"
-#include "util/fiber_sched_algo.h"
-#include "util/fibers/fiber.h"
+//#include "util/fiber_sched_algo.h"
+#include "util/fibers/fiber2.h"
 
 #ifdef DFLY_USE_SSL
 #include "util/tls/tls_socket.h"
@@ -359,17 +359,17 @@ void Connection::OnShutdown() {
 
 void Connection::OnPreMigrateThread() {
   // If we migrating to another io_uring we should cancel any pending requests we have.
-  if (break_poll_id_ != kuint32max) {
+  if (break_poll_id_ != UINT32_MAX) {
     auto* ls = static_cast<LinuxSocketBase*>(socket_.get());
     ls->CancelPoll(break_poll_id_);
-    break_poll_id_ = kuint32max;
+    break_poll_id_ = UINT32_MAX;
   }
 }
 
 void Connection::OnPostMigrateThread() {
   // Once we migrated, we should rearm OnBreakCb callback.
   if (breaker_cb_) {
-    DCHECK_EQ(kuint32max, break_poll_id_);
+    DCHECK_EQ(UINT32_MAX, break_poll_id_);
 
     auto* ls = static_cast<LinuxSocketBase*>(socket_.get());
     break_poll_id_ =
@@ -393,7 +393,7 @@ void Connection::UnregisterShutdownHook(ShutdownHandle id) {
 }
 
 void Connection::HandleRequests() {
-  FiberProps::SetName("DflyConnection");
+  ThisFiber::SetName("DflyConnection");
 
   LinuxSocketBase* lsb = static_cast<LinuxSocketBase*>(socket_.get());
 
@@ -448,7 +448,7 @@ void Connection::HandleRequests() {
 
       ConnectionFlow(peer);
 
-      if (break_poll_id_ != kuint32max) {
+      if (break_poll_id_ != UINT32_MAX) {
         us->CancelPoll(break_poll_id_);
       }
 
@@ -507,7 +507,7 @@ string Connection::GetClientInfo() const {
   return res;
 }
 
-uint32 Connection::GetClientId() const {
+uint32_t Connection::GetClientId() const {
   return id_;
 }
 
@@ -552,7 +552,7 @@ io::Result<bool> Connection::CheckForHttpProto(FiberSocketBase* peer) {
 void Connection::ConnectionFlow(FiberSocketBase* peer) {
   stats_ = service_->GetThreadLocalConnectionStats();
 
-  auto dispatch_fb = MakeFiber(fibers_ext::Launch::dispatch, [&] { DispatchFiber(peer); });
+  auto dispatch_fb = fb2::Fiber(fb2::Launch::dispatch, "dispatch", [&] { DispatchFiber(peer); });
 
   ++stats_->num_conns;
   ++stats_->conn_received_cnt;
@@ -677,7 +677,7 @@ auto Connection::ParseRedis() -> ParserStatus {
         if (dispatch_q_.size() == 1) {
           evc_.notify();
         } else if (dispatch_q_.size() > 10) {
-          fibers_ext::Yield();
+          ThisFiber::Yield();
         }
       }
     }
@@ -756,7 +756,7 @@ void Connection::OnBreakCb(int32_t mask) {
   VLOG(1) << "Got event " << mask;
   CHECK(cc_);
   cc_->conn_closing = true;
-  break_poll_id_ = kuint32max;  // do not attempt to cancel it.
+  break_poll_id_ = UINT32_MAX;  // do not attempt to cancel it.
 
   breaker_cb_(mask);
   evc_.notify();  // Notify dispatch fiber.
@@ -835,7 +835,7 @@ auto Connection::IoLoop(util::FiberSocketBase* peer) -> variant<error_code, Pars
 // InputLoop. Note: in some cases, InputLoop may decide to dispatch directly and bypass the
 // DispatchFiber.
 void Connection::DispatchFiber(util::FiberSocketBase* peer) {
-  FiberProps::SetName("DispatchFiber");
+  ThisFiber::SetName("DispatchFiber");
 
   SinkReplyBuilder* builder = cc_->reply_builder();
   DispatchOperations dispatch_op{builder, this};
