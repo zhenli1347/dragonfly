@@ -70,12 +70,13 @@ class ValueType(Enum):
 class CommandGenerator:
     """Class for generating complex command sequences"""
 
-    def __init__(self, target_keys, val_size, batch_size, max_multikey, unsupported_types=[]):
+    def __init__(self, target_keys, val_size, batch_size, max_multikey, unsupported_types=[], allow_nondeterministic_actions=True):
         self.key_cnt_target = target_keys
         self.val_size = val_size
         self.batch_size = min(batch_size, target_keys)
         self.max_multikey = max_multikey
         self.unsupported_types = unsupported_types
+        self.allow_nondeterministic_actions = allow_nondeterministic_actions
 
         # Key management
         self.key_sets = [set() for _ in ValueType]
@@ -190,13 +191,12 @@ class CommandGenerator:
                 return None, 0
             return "DEL " + " ".join(keys), -len(keys)
 
-    UPDATE_ACTIONS = [
+    DETERMINISTIC_UPDATE_ACTIONS = [
         ('APPEND {k} {val}', ValueType.STRING),
         ('SETRANGE {k} 10 {val}', ValueType.STRING),
         ('LPUSH {k} {val}', ValueType.LIST),
         ('LPOP {k}', ValueType.LIST),
         ('SADD {k} {val}', ValueType.SET),
-        ('SPOP {k}', ValueType.SET),
         ('HSETNX {k} v0 {val}', ValueType.HSET),
         ('HINCRBY {k} v1 1', ValueType.HSET),
         # ('ZPOPMIN {k} 1', ValueType.ZSET), https://github.com/dragonflydb/dragonfly/issues/949
@@ -206,11 +206,18 @@ class CommandGenerator:
         ('JSON.ARRAPPEND {k} $.arr "{val}"', ValueType.JSON)
     ]
 
+    NONDETERMINISTIC_UPDATE_ACTIONS = [
+        ('SPOP {k}', ValueType.SET),
+    ]
+
     def gen_update_cmd(self):
         """
         Generate command that makes no change to keyset: random of UPDATE_ACTIONS.
         """
-        cmd, t = random.choice(self.UPDATE_ACTIONS)
+        actions = self.DETERMINISTIC_UPDATE_ACTIONS
+        if (self.allow_nondeterministic_actions):
+             actions += self.NONDETERMINISTIC_UPDATE_ACTIONS
+        cmd, t = random.choice(actions)
         k, _ = self.randomize_key(t)
         val = ''.join(random.choices(string.ascii_letters, k=3))
         return cmd.format(k=f"k{k}", val=val) if k is not None else None, 0
@@ -339,18 +346,26 @@ class DflySeeder:
         assert await seeder.compare(capture, port=1112)
     """
 
-    def __init__(self, port=6379, keys=1000, val_size=50, batch_size=100, max_multikey=5, dbcount=1, multi_transaction_probability=0.3, log_file=None, unsupported_types=[]):
+    def __init__(self, port=6379, keys=1000, val_size=50, batch_size=100, max_multikey=5, dbcount=1,
+                 multi_transaction_probability=0.3, log_file=None, unsupported_types=[],
+                 allow_non_deterministic_actions = True, use_resp3=False):
         self.gen = CommandGenerator(
-            keys, val_size, batch_size, max_multikey, unsupported_types
+            keys, val_size, batch_size, max_multikey, unsupported_types, allow_non_deterministic_actions
         )
         self.port = port
         self.dbcount = dbcount
         self.multi_transaction_probability = multi_transaction_probability
         self.stop_flag = False
-
+        self.use_resp3 = use_resp3
         self.log_file = log_file
         if self.log_file is not None:
             open(self.log_file, 'w').close()
+
+    async def create_client(self, port=6379, db=0):
+        client = aioredis.Redis(port=port, db=db)
+        if self.use_resp3:
+            assert (await client.execute_command('HELLO', '3'))[b"proto"] == 3
+        return client
 
     async def run(self, target_ops=None, target_deviation=None):
         """
@@ -414,7 +429,7 @@ class DflySeeder:
 
     async def _capture_db(self, port, target_db, keys):
         eprint(f"Capture data on port {port}, db {target_db}")
-        client = aioredis.Redis(port=port, db=target_db)
+        client = await self.create_client(port, target_db)
         capture = DataCapture(await self._capture_entries(client, keys))
         await client.connection_pool.disconnect()
         return capture
@@ -476,27 +491,33 @@ class DflySeeder:
         return submitted
 
     async def _executor_task(self, db, queue):
-        client = aioredis.Redis(port=self.port, db=db)
-
+        clients = []
+        if type(self.port) == type(7):
+            clients.append(await self.create_client(port=self.port, db=db))
+        else:
+            for port in self.port:
+                clients.append(await self.create_client(port=port, db=db))
         while True:
             tx_data = await queue.get()
             if tx_data is None:
                 queue.task_done()
                 break
+            for client in clients:
+                pipe = client.pipeline(transaction=tx_data[1])
+                for cmd in tx_data[0]:
+                    print(f"EXECUTING {cmd}")
+                    if isinstance(cmd, str):
+                        pipe.execute_command(cmd)
+                    else:
+                        pipe.execute_command(*cmd)
+                try:
+                    await pipe.execute()
+                except Exception as e:
+                    raise SystemExit(e)
 
-            pipe = client.pipeline(transaction=tx_data[1])
-            for cmd in tx_data[0]:
-                if isinstance(cmd, str):
-                    pipe.execute_command(cmd)
-                else:
-                    pipe.execute_command(*cmd)
-
-            try:
-                await pipe.execute()
-            except Exception as e:
-                raise SystemExit(e)
             queue.task_done()
-        await client.connection_pool.disconnect()
+
+        await asyncio.gather(*(client.connection_pool.disconnect() for client in clients))
 
     CAPTURE_COMMANDS = {
         ValueType.STRING: lambda pipe, k: pipe.get(k),

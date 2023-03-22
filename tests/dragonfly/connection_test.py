@@ -208,6 +208,10 @@ async def test_pubsub_command(async_client):
 
 
 async def run_pubsub(async_client, messages, channel_name):
+
+    hello = await async_client.execute_command("HELLO", "3")
+    assert hello["proto"] == 3
+
     pubsub = async_client.pubsub()
     await pubsub.subscribe(channel_name)
 
@@ -231,6 +235,9 @@ async def run_pubsub(async_client, messages, channel_name):
 
 
 async def run_multi_pubsub(async_client, messages, channel_name):
+    hello = await async_client.execute_command("HELLO", "3")
+    assert hello["proto"] == 3
+
     subs = [async_client.pubsub() for i in range(5)]
     for s in subs:
         await s.subscribe(channel_name)
