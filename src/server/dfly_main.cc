@@ -516,6 +516,8 @@ Usage: dragonfly [FLAGS]
   mi_option_enable(mi_option_show_errors);
   mi_option_set(mi_option_max_warnings, 0);
   mi_option_set(mi_option_decommit_delay, 0);
+  mi_register_error([](int err, void*) { LOG_IF(FATAL, err == EAGAIN) << "Double free detected"; },
+                    nullptr);
 
   base::sys::KernelVersion kver;
   base::sys::GetKernelVersion(&kver);

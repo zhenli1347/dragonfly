@@ -22,6 +22,9 @@ include(internal)
 include_directories(src)
 include_directories(helio)
 
+set(HELIO_MIMALLOC_OPTS "-DMI_SECURE=ON" CACHE STRING "")
+set(HELIO_MIMALLOC_LIBNAME libmimalloc-secure.a CACHE STRING "")
+
 add_subdirectory(helio)
 add_subdirectory(src)
 
