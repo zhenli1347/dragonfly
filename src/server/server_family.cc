@@ -1203,7 +1203,9 @@ void ServerFamily::Cluster(CmdArgList args, ConnectionContext* cntx) {
         "   Return cluster configuration seen by node. Output format:",
         "   <id> <ip:port> <flags> <master> <pings> <pongs> <epoch> <link> <slot> ...",
         "INFO",
-        +"  Return information about the cluster",
+        "  Return information about the cluster",
+        "READONLY",
+        "  Emulates https://redis.io/commands/readonly/ by simply returning OK",
         "HELP",
         "    Prints this help.",
     };
@@ -1261,6 +1263,9 @@ void ServerFamily::Cluster(CmdArgList args, ConnectionContext* cntx) {
     // In case this is the master, it can save the information about the replica from this command
     std::string msg = BuildClusterNodeReply(cntx);
     (*cntx)->SendBulkString(msg);
+    return;
+  } else if (sub_cmd == "READONLY") {
+    (*cntx)->SendOk();
     return;
   } else if (sub_cmd == "INFO") {
     std::string msg;
